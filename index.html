@@ -912,6 +912,37 @@ function updateInfoPanel(node) {
 cy.on('tap', 'node', evt => {
   const node = evt.target;
   updateInfoPanel(node);
+  
+  // 모든 노드의 outline 초기화
+  cy.nodes().style({
+    'border-width': 2,
+    'border-color': '#fff'
+  });
+  
+  // 클릭된 노드와 연결된 모든 노드 찾기 (neighborhood)
+  const connectedNodes = node.neighborhood('node');
+  
+  // 클릭된 노드 강조
+  node.style({
+    'border-width': 5,
+    'border-color': '#ef4444'
+  });
+  
+  // 연결된 노드들 강조
+  connectedNodes.style({
+    'border-width': 4,
+    'border-color': '#f87171'
+  });
+});
+
+// 배경 클릭 시 outline 초기화
+cy.on('tap', evt => {
+  if (evt.target === cy) {
+    cy.nodes().style({
+      'border-width': 2,
+      'border-color': '#fff'
+    });
+  }
 });
 
 // Zoom 이벤트 핸들러
