@@ -202,7 +202,9 @@ const LEVEL_COLORS = {
   TC: '#6366f1',            // TC/qdisc - 인디고색
   BUFFER: '#14b8a6',        // Buffer - 틸색
   USER: '#f59e0b',          // User-space - 앰버색
-  KERNEL_OPTION: '#a855f7'  // Kernel Option - 보라색
+  KERNEL_OPTION: '#a855f7', // Kernel Option - 보라색
+  DROP: '#dc2626',          // Packet Drop - 진한 빨간색
+  RST: '#991b1b'            // RST - 어두운 빨간색
 };
 
 // 노드 데이터 구조
@@ -491,6 +493,80 @@ const networkData = {
       position: { x: 1200, y: 350 } 
     },
     
+    // 패킷 드롭 및 RST 노드
+    { 
+      id: 'drop-rx-ring', 
+      label: 'Packet Drop', 
+      level: 'DROP', 
+      desc: 'NIC RX Ring 버퍼 오버플로우',
+      detailedDesc: 'NIC RX Ring 버퍼가 가득 찬 경우 패킷이 드롭됩니다.\n\n발생 원인:\n- 고속 네트워크에서 패킷 수신 속도가 드라이버 처리 속도를 초과할 때\n- net.core.netdev_max_backlog 값이 너무 작게 설정된 경우\n- CPU 부하가 높아 패킷 처리가 지연될 때\n- 링 버퍼 크기가 네트워크 트래픽에 비해 부족한 경우\n\n증상:\n- ifconfig에서 RX dropped 카운터 증가\n- 네트워크 성능 저하, 패킷 손실\n- 애플리케이션에서 타임아웃 발생\n\n해결 방법:\n- net.core.netdev_max_backlog 값 증가\n- NIC 링 버퍼 크기 증가 (ethtool -G)\n- CPU 부하 감소, NAPI 효율성 향상',
+      functions: ['ring buffer overflow'], 
+      position: { x: 150, y: -100 } 
+    },
+    { 
+      id: 'drop-napi', 
+      label: 'Packet Drop', 
+      level: 'DROP', 
+      desc: 'NAPI 백로그 초과',
+      detailedDesc: 'NAPI 폴링 중 백로그가 초과되면 패킷이 드롭됩니다.\n\n발생 원인:\n- net.core.netdev_max_backlog 값 초과\n- net.core.netdev_budget 값이 너무 작아 패킷 처리가 완료되지 않을 때\n- 고속 네트워크에서 패킷 도착 속도가 처리 속도를 초과할 때\n\n증상:\n- "netdev_max_backlog exceeded" 커널 메시지\n- 네트워크 인터페이스 통계에서 drop 증가\n- 패킷 손실로 인한 성능 저하\n\n해결 방법:\n- net.core.netdev_max_backlog 값 증가 (기본값: 1000)\n- net.core.netdev_budget 값 조정\n- CPU 성능 향상, 인터럽트 부하 감소',
+      functions: ['netif_rx()', 'backlog overflow'], 
+      position: { x: 600, y: -100 } 
+    },
+    { 
+      id: 'drop-xdp', 
+      label: 'Packet Drop', 
+      level: 'DROP', 
+      desc: 'XDP DROP 액션',
+      detailedDesc: 'XDP 프로그램에서 DROP 액션을 반환하면 패킷이 즉시 폐기됩니다.\n\n발생 원인:\n- XDP eBPF 프로그램이 패킷을 분석한 결과 DROP 액션 반환\n- DDoS 방어, 패킷 필터링 규칙에 의해 차단\n- 잘못 작성된 XDP 프로그램으로 인한 오탐\n\n특징:\n- skb 생성 이전에 드롭되므로 매우 빠름 (마이크로초 단위)\n- Netfilter보다 먼저 실행되어 CPU 부하 절감\n- 드라이버 레벨에서 처리되므로 효율적\n\n사용 사례:\n- DDoS 공격 차단\n- 특정 IP/포트 필터링\n- 로드 밸런싱에서 특정 패킷 제외',
+      functions: ['bpf_prog_run_xdp()', 'XDP_DROP'], 
+      position: { x: 450, y: -50 } 
+    },
+    { 
+      id: 'drop-netfilter', 
+      label: 'Packet Drop', 
+      level: 'DROP', 
+      desc: 'Netfilter DROP/REJECT',
+      detailedDesc: 'iptables/nftables 규칙에서 DROP 또는 REJECT 액션이 적용되면 패킷이 차단됩니다.\n\n발생 원인:\n- iptables INPUT/FORWARD/OUTPUT 체인에서 DROP 규칙 매칭\n- 방화벽 정책에 의해 차단된 패킷\n- REJECT 규칙: 패킷 차단 + ICMP 에러 패킷 전송\n- DROP 규칙: 패킷 조용히 폐기 (에러 패킷 없음)\n\nDROP vs REJECT:\n- DROP: 패킷을 조용히 폐기, 상대방은 타임아웃 대기\n- REJECT: 패킷 폐기 + ICMP destination unreachable 전송, 상대방이 즉시 실패 인지\n\n일반적인 차단 사례:\n- 허용되지 않은 포트로의 연결 시도\n- 차단된 IP 주소에서의 접근\n- 상태 기반 방화벽에서 INVALID 상태의 패킷',
+      functions: ['nf_hook_slow()', 'iptables DROP/REJECT'], 
+      position: { x: 1200, y: -100 } 
+    },
+    { 
+      id: 'drop-routing', 
+      label: 'Packet Drop', 
+      level: 'DROP', 
+      desc: '라우팅 실패 / TTL 만료',
+      detailedDesc: '라우팅 결정 실패 또는 TTL(Time To Live) 만료 시 패킷이 드롭됩니다.\n\n발생 원인:\n- 라우팅 테이블에 목적지 경로가 없는 경우 (No route to host)\n- IP TTL이 0에 도달한 경우 (TTL expired in transit)\n- 목적지 네트워크에 도달할 수 없는 경우\n- Reverse Path Filtering(rp_filter)에 의해 차단된 경우\n\nTTL 만료:\n- IP 헤더의 TTL 필드가 각 라우터를 거칠 때마다 1씩 감소\n- TTL이 0이 되면 패킷 폐기 + ICMP Time Exceeded 메시지 전송\n- 무한 루프 방지, 트레이스라우트에 사용\n\n라우팅 실패:\n- 라우팅 테이블에 경로가 없으면 패킷 폐기\n- ICMP Destination Unreachable (Network Unreachable) 전송\n- ip_forward = 0인 경우 포워딩 불가로 드롭',
+      functions: ['ip_route_input_noref()', 'ip_forward()', 'TTL check'], 
+      position: { x: 1500, y: -100 } 
+    },
+    { 
+      id: 'drop-tcp', 
+      label: 'Packet Drop', 
+      level: 'DROP', 
+      desc: 'TCP 에러로 인한 드롭',
+      detailedDesc: 'TCP 계층에서 패킷 검증 실패 시 패킷이 드롭됩니다.\n\n발생 원인:\n- TCP 체크섬 에러: 패킷이 손상된 경우\n- 시퀀스 번호 범위 밖: 예상 범위를 벗어난 시퀀스 번호\n- TCP 윈도우 오버플로우: 수신 윈도우를 초과하는 데이터\n- 잘못된 TCP 플래그 조합: SYN+FIN, SYN+RST 등 비정상적인 플래그\n- 존재하지 않는 연결로의 패킷: ESTABLISHED 상태가 아닌 연결\n\nTCP 검증 과정:\n1. 체크섬 검증: 패킷 무결성 확인\n2. 시퀀스 번호 검증: 예상 범위 내인지 확인\n3. 연결 상태 확인: 해당 연결이 존재하는지 확인\n4. 윈도우 크기 확인: 수신 가능한 데이터 크기 확인\n\n드롭 시 동작:\n- 패킷은 조용히 폐기됨 (RST 전송 없음)\n- 상대방은 재전송을 시도\n- 일정 횟수 재전송 실패 시 연결 타임아웃',
+      functions: ['tcp_v4_rcv()', 'tcp_validate_incoming()', 'tcp_checksum_complete()'], 
+      position: { x: 1800, y: -100 } 
+    },
+    { 
+      id: 'rst-tcp', 
+      label: 'TCP RST', 
+      level: 'RST', 
+      desc: 'TCP RST 전송',
+      detailedDesc: 'TCP 연결이 비정상적으로 종료되거나 거부될 때 RST(Reset) 패킷이 전송됩니다.\n\n발생 원인:\n- 존재하지 않는 포트로의 연결 시도: 애플리케이션이 해당 포트에서 리스닝하지 않음\n- 연결 상태 불일치: CLOSED 상태의 소켓으로 패킷 수신\n- 애플리케이션 강제 종료: close() 호출 또는 프로세스 종료\n- 타임아웃: 연결 타임아웃 발생\n- 보안 정책: 방화벽이나 애플리케이션이 연결 거부\n\nRST 패킷 특징:\n- TCP 헤더의 RST 플래그가 1로 설정됨\n- 연결을 즉시 종료, 재사용 불가\n- SYN 패킷에 대한 RST: 포트가 닫혀있음을 의미\n- ESTABLISHED 연결에 대한 RST: 연결 강제 종료\n\n일반적인 시나리오:\n1. 클라이언트가 존재하지 않는 포트로 SYN 전송 → 서버가 RST 응답\n2. 타임아웃된 연결로 패킷 수신 → RST 전송\n3. 애플리케이션이 소켓을 닫은 후 패킷 수신 → RST 전송\n\nRST vs FIN:\n- FIN: 정상적인 연결 종료 (4-way handshake)\n- RST: 비정상적인 연결 종료 (즉시 종료)',
+      functions: ['tcp_send_active_reset()', 'tcp_reset()', 'inet_csk_reqsk_queue_drop()'], 
+      position: { x: 1800, y: -50 } 
+    },
+    { 
+      id: 'drop-qdisc', 
+      label: 'Packet Drop', 
+      level: 'DROP', 
+      desc: 'qdisc 큐 오버플로우',
+      detailedDesc: 'qdisc 큐가 가득 차면 패킷이 드롭됩니다.\n\n발생 원인:\n- qdisc 큐 크기 초과: 설정된 큐 크기를 넘는 트래픽\n- 트래픽 shaping 정책: 대역폭 제한으로 인한 큐 포화\n- CPU 부하: 패킷 전송 속도가 큐 비우기 속도보다 빠를 때\n- qdisc 알고리즘에 따른 드롭: RED, CoDel 등은 의도적으로 패킷 드롭\n\nqdisc별 드롭 동작:\n- pfifo_fast: 큐가 가득 차면 tail drop\n- fq (Fair Queue): 각 flow별 큐가 가득 차면 드롭\n- cake: 대역폭 제한 초과 시 드롭\n- RED: 평균 큐 길이가 임계값 초과 시 확률적 드롭\n\n증상:\n- 네트워크 인터페이스 통계에서 TX dropped 증가\n- 대역폭 제한으로 인한 전송 속도 저하\n- 큐 지연 증가\n\n해결 방법:\n- qdisc 큐 크기 증가\n- 트래픽 shaping 정책 조정\n- CPU 부하 감소, 전송 처리 속도 향상',
+      functions: ['qdisc_enqueue()', 'qdisc_drop()'], 
+      position: { x: 1500, y: 200 } 
+    },
+    
     // 커널 옵션 노드 (RX와 TX 사이에 배치)
     { 
       id: 'opt-net', 
@@ -671,6 +747,20 @@ const networkData = {
     { source: 'routing-tx', target: 'nf:postrouting' },
     { source: 'nf:postrouting', target: 'tc-tx' },
     
+    // 패킷 드롭 및 RST 연결
+    { source: 'nic-rx-ring', target: 'drop-rx-ring' },
+    { source: 'napi-rx', target: 'drop-napi' },
+    { source: 'xdp-rx', target: 'drop-xdp' },
+    { source: 'netfilter-rx', target: 'drop-netfilter' },
+    { source: 'nf:input', target: 'drop-netfilter' },
+    { source: 'nf:forward', target: 'drop-netfilter' },
+    { source: 'nf:output', target: 'drop-netfilter' },
+    { source: 'routing-rx', target: 'drop-routing' },
+    { source: 'routing-tx', target: 'drop-routing' },
+    { source: 'socket-rx', target: 'drop-tcp' },
+    { source: 'socket-rx', target: 'rst-tcp' },
+    { source: 'qdisc-queue', target: 'drop-qdisc' },
+    
     // 커널 옵션 연결
     { source: 'opt-net', target: 'driver-rx' },
     { source: 'opt-net', target: 'driver-tx' },
@@ -822,6 +912,24 @@ const cy = cytoscape({
         'height': 50,
         'font-size': 11
       }
+    },
+    {
+      selector: 'node[level = "DROP"]',
+      style: {
+        'background-color': LEVEL_COLORS.DROP,
+        'shape': 'diamond',
+        'width': 120,
+        'height': 120
+      }
+    },
+    {
+      selector: 'node[level = "RST"]',
+      style: {
+        'background-color': LEVEL_COLORS.RST,
+        'shape': 'diamond',
+        'width': 120,
+        'height': 120
+      }
     }
   ],
   
@@ -873,7 +981,9 @@ function updateInfoPanel(node) {
     'TC': '트래픽 제어',
     'BUFFER': '버퍼',
     'USER': '사용자 공간',
-    'KERNEL_OPTION': '커널 옵션'
+    'KERNEL_OPTION': '커널 옵션',
+    'DROP': '패킷 드롭',
+    'RST': 'TCP RST'
   };
   
   let html = `
@@ -1107,6 +1217,14 @@ const legendHtml = `
     <div class="legend-item">
       <div class="legend-color" style="background: ${LEVEL_COLORS.KERNEL_OPTION};"></div>
       <span>커널 옵션 (Kernel Option)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: ${LEVEL_COLORS.DROP};"></div>
+      <span>패킷 드롭 (Packet Drop)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: ${LEVEL_COLORS.RST};"></div>
+      <span>TCP RST</span>
     </div>
   </div>
 `;
