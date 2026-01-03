@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Linux Network Flow Map</title>
+  <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      display: flex;
+      height: 100vh;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      overflow: hidden;
+    }
+
+    #cy {
+      flex: 1;
+      background: #111;
+      position: relative;
+    }
+
+    #info {
+      width: 350px;
+      padding: 20px;
+      background: #1a1a1a;
+      border-left: 1px solid #333;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    #info h3 {
+      margin: 0 0 8px 0;
+      color: #7dd3fc;
+      font-size: 18px;
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 8px;
+    }
+
+    #info p {
+      margin: 8px 0;
+      line-height: 1.6;
+      color: #d1d5db;
+    }
+
+    #info .desc {
+      color: #9ca3af;
+      font-size: 14px;
+    }
+
+    #info .function-list {
+      margin-top: 12px;
+      padding-left: 20px;
+    }
+
+    #info .function-list li {
+      margin: 6px 0;
+      color: #60a5fa;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+
+    #info .level-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    #controls {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(26, 26, 26, 0.9);
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      z-index: 1000;
+    }
+
+    #controls h4 {
+      margin: 0 0 8px 0;
+      color: #7dd3fc;
+      font-size: 14px;
+    }
+
+    #controls .control-item {
+      margin: 4px 0;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    #zoom-level {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(26, 26, 26, 0.9);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #333;
+      z-index: 1000;
+      font-size: 12px;
+      color: #60a5fa;
+    }
+
+    .legend {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #333;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+      font-size: 12px;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="cy"></div>
+
+<div id="info">
+  <h3>Node Info</h3>
+  <p class="desc">노드를 클릭하여 상세 정보를 확인하세요.</p>
+  <p class="desc">마우스 휠로 확대/축소, 드래그로 이동할 수 있습니다.</p>
+</div>
+
+<div id="controls">
+  <h4>Controls</h4>
+  <div class="control-item">🖱️ 드래그: 이동</div>
+  <div class="control-item">🖱️ 휠: 확대/축소</div>
+  <div class="control-item">⌨️ 방향키: 이동</div>
+  <div class="control-item">⌨️ +/-: 확대/축소</div>
+  <div class="control-item">⌨️ ESC: 전체 보기</div>
+</div>
+
+<div id="zoom-level">Zoom: 1.00x</div>
+
+<script>
+// Zoom 레벨 정의
+const ZOOM_LEVEL = {
+  OVERVIEW: 0.5,
+  HOOK: 1.2,
+  TABLE: 1.8,
+  FUNCTION: 2.5
+};
+
+// 계층별 색상 정의
+const LEVEL_COLORS = {
+  HARDWARE: '#ef4444',      // NIC - 빨간색
+  DRIVER: '#f97316',        // Driver - 주황색
+  KERNEL_LOW: '#eab308',    // NAPI, skb - 노란색
+  NETFILTER: '#8b5cf6',     // Netfilter - 보라색
+  ROUTING: '#06b6d4',       // Routing - 청록색
+  SOCKET: '#10b981',        // Socket - 초록색
+  XDP: '#ec4899',           // XDP - 핑크색
+  TC: '#6366f1'             // TC/qdisc - 인디고색
+};
+
+// 노드 데이터 구조
+const networkData = {
+  nodes: [
+    // RX 경로
+    { 
+      id: 'nic-rx', 
+      label: 'NIC', 
+      level: 'HARDWARE', 
+      desc: '네트워크 인터페이스 카드',
+      detailedDesc: '물리적 네트워크 인터페이스 카드로, 전기 신호를 받아 패킷을 수신합니다. 패킷이 도착하면 DMA(Direct Memory Access)를 통해 커널 메모리의 ring buffer에 패킷을 직접 적재하고, 하드웨어 인터럽트를 발생시켜 커널에 패킷 수신을 알립니다.',
+      functions: ['interrupt handler'], 
+      position: { x: 0, y: -200 } 
+    },
+    { 
+      id: 'driver-rx', 
+      label: 'Driver', 
+      level: 'DRIVER', 
+      desc: '네트워크 카드 드라이버',
+      detailedDesc: 'NIC 하드웨어와 커널 네트워크 스택을 연결하는 드라이버입니다. 인터럽트 핸들러에서 패킷 수신을 감지하면, NAPI(New API) 스케줄링을 통해 인터럽트 기반 처리를 폴링 기반으로 전환합니다. 이는 고속 네트워크에서 인터럽트 폭주를 방지하기 위한 메커니즘입니다.',
+      functions: ['napi_schedule()', 'driver_poll()'], 
+      position: { x: 200, y: -200 } 
+    },
+    { 
+      id: 'napi-rx', 
+      label: 'NAPI', 
+      level: 'KERNEL_LOW', 
+      desc: '인터럽트 → 폴링 전환',
+      detailedDesc: 'NAPI(New API)는 고속 네트워크 환경에서 인터럽트 폭주를 방지하기 위한 메커니즘입니다. 초기 인터럽트 후에는 폴링 모드로 전환되어 여러 패킷을 한 번에 처리합니다. 이는 CPU 효율성을 크게 향상시킵니다. struct napi_struct 구조체로 관리되며, GRO(Generic Receive Offload)와 함께 작동하여 패킷을 효율적으로 처리합니다.',
+      functions: ['napi_poll()', 'napi_gro_receive()'], 
+      position: { x: 400, y: -200 } 
+    },
+    { 
+      id: 'xdp-rx', 
+      label: 'XDP', 
+      level: 'XDP', 
+      desc: 'eBPF 기반 드라이버 레벨 처리 (옵션)',
+      detailedDesc: 'XDP(eXpress Data Path)는 eBPF 프로그램을 사용하여 드라이버 레벨에서 매우 빠른 패킷 처리를 가능하게 합니다. skb 생성 이전 또는 직후에 실행되며, Netfilter보다 먼저 처리됩니다. DROP(패킷 폐기), PASS(통과), TX(재전송), REDIRECT(다른 인터페이스로 리다이렉트) 등의 액션을 수행할 수 있습니다. DDoS 방어, 로드 밸런싱, 패킷 필터링 등에 사용됩니다.',
+      functions: ['bpf_prog_run_xdp()', 'xdp_do_redirect()'], 
+      position: { x: 300, y: -100 } 
+    },
+    { 
+      id: 'skb-rx', 
+      label: 'sk_buff', 
+      level: 'KERNEL_LOW', 
+      desc: '패킷 메타데이터 구조체',
+      detailedDesc: 'sk_buff(socket buffer)는 리눅스 커널에서 모든 네트워크 패킷을 표현하는 핵심 데이터 구조입니다. 패킷 데이터와 메타데이터(프로토콜, 길이, 네트워크 인터페이스, 라우팅 정보 등)를 포함합니다. 이 구조체는 네트워크 스택 전체를 통과하며, 각 계층에서 필요한 정보를 추가하거나 수정합니다. 주요 필드로는 skb->data(패킷 데이터), skb->len(길이), skb->protocol(프로토콜), skb->dev(네트워크 장치) 등이 있습니다.',
+      functions: ['build_skb()', 'netif_receive_skb()'], 
+      position: { x: 600, y: -200 } 
+    },
+    { 
+      id: 'netfilter-rx', 
+      label: 'Netfilter', 
+      level: 'NETFILTER', 
+      desc: '패킷 필터링 및 NAT',
+      detailedDesc: 'Netfilter는 리눅스 커널의 패킷 필터링 및 NAT(Network Address Translation) 프레임워크입니다. iptables와 nftables의 기반이 되는 인프라로, 여러 hook 지점에서 패킷을 가로채 처리합니다. PREROUTING, INPUT, FORWARD, OUTPUT, POSTROUTING의 5가지 hook 지점에서 패킷을 검사하고, conntrack(연결 추적), NAT, 필터링, mangling 등의 작업을 수행합니다.',
+      functions: ['nf_hook_slow()'], 
+      position: { x: 800, y: -200 } 
+    },
+    { 
+      id: 'routing-rx', 
+      label: 'Routing', 
+      level: 'ROUTING', 
+      desc: '라우팅 테이블 조회',
+      detailedDesc: '라우팅 결정 단계에서는 FIB(Forwarding Information Base)를 조회하여 패킷의 목적지가 로컬 시스템인지, 다른 호스트로 포워딩해야 하는지 결정합니다. ip_route_input_noref() 함수가 라우팅 테이블을 조회하고, 결과에 따라 로컬 수신(INPUT) 또는 포워딩(FORWARD) 경로로 분기합니다. 라우팅 결정 후에는 패킷의 목적지 인터페이스와 게이트웨이 정보가 skb에 설정됩니다.',
+      functions: ['ip_route_input_noref()', 'ip_rcv_finish()'], 
+      position: { x: 1000, y: -200 } 
+    },
+    { 
+      id: 'socket-rx', 
+      label: 'Socket', 
+      level: 'SOCKET', 
+      desc: 'User-space 전달',
+      detailedDesc: 'Socket 계층에서는 L4(전송 계층) 프로토콜(TCP/UDP 등)에 따라 패킷을 처리하고, 해당하는 소켓의 수신 큐(sk_receive_queue)에 패킷을 추가합니다. TCP의 경우 tcp_v4_rcv()에서 패킷을 검증하고, 연결 상태에 따라 처리한 후 소켓 큐에 추가합니다. 패킷이 큐에 추가되면 sk_data_ready()를 호출하여 대기 중인 사용자 공간 프로세스를 깨웁니다(wakeup). 사용자 공간의 recv() 시스템 콜이 이 큐에서 데이터를 읽어갑니다.',
+      functions: ['tcp_v4_rcv()', 'sock_queue_rcv_skb()', 'sk_data_ready()'], 
+      position: { x: 1200, y: -200 } 
+    },
+    
+    // Netfilter Hook 세부
+    { 
+      id: 'nf:prerouting', 
+      label: 'PREROUTING', 
+      level: 'NETFILTER', 
+      desc: '라우팅 전 처리',
+      detailedDesc: 'PREROUTING hook은 라우팅 결정 이전에 실행되는 첫 번째 Netfilter hook입니다. 여기서 주로 DNAT(Destination NAT)와 conntrack(연결 추적)이 시작됩니다. 패킷의 목적지 주소를 변경하거나, 연결 추적 테이블에 연결 정보를 기록합니다. 이 hook은 모든 들어오는 패킷에 대해 실행되며, NF_INET_PRE_ROUTING hook point에서 처리됩니다.',
+      functions: ['nf_hook_slow()', 'ipv4_conntrack_in()'], 
+      parent: 'netfilter-rx', 
+      position: { x: 750, y: -300 } 
+    },
+    { 
+      id: 'nf:input', 
+      label: 'INPUT', 
+      level: 'NETFILTER', 
+      desc: '로컬 목적지 처리',
+      detailedDesc: 'INPUT hook은 로컬 시스템으로 향하는 패킷에 대해서만 실행됩니다. 라우팅 결정 후 패킷의 목적지가 로컬인 경우, 이 hook에서 패킷 필터링 규칙을 적용합니다. 방화벽 규칙, 로깅, 패킷 드롭 등의 작업이 여기서 수행됩니다. NF_INET_LOCAL_IN hook point에서 처리되며, ip_local_deliver() 함수가 이 hook을 호출합니다.',
+      functions: ['ip_local_deliver()', 'nf_hook()'], 
+      parent: 'netfilter-rx', 
+      position: { x: 850, y: -300 } 
+    },
+    { 
+      id: 'nf:forward', 
+      label: 'FORWARD', 
+      level: 'NETFILTER', 
+      desc: '포워딩 처리',
+      detailedDesc: 'FORWARD hook은 라우터 역할을 하는 시스템에서, 한 인터페이스로 들어온 패킷을 다른 인터페이스로 전달할 때 실행됩니다. 로컬 시스템이 목적지가 아닌 패킷에 대해 포워딩 규칙을 적용합니다. 이 hook에서도 패킷 필터링, 로깅 등이 수행됩니다. NF_INET_FORWARD hook point에서 처리되며, ip_forward() 함수가 이 hook을 호출합니다.',
+      functions: ['ip_forward()', 'nf_hook()'], 
+      parent: 'netfilter-rx', 
+      position: { x: 750, y: -100 } 
+    },
+    
+    // TX 경로
+    { 
+      id: 'socket-tx', 
+      label: 'Socket', 
+      level: 'SOCKET', 
+      desc: 'User-space에서 전송',
+      detailedDesc: '사용자 공간에서 send(), sendto(), write() 등의 시스템 콜을 호출하면, 커널의 __sys_sendto() 함수가 호출됩니다. 이 함수는 sock_sendmsg()를 통해 소켓에 데이터를 전달합니다. 이 시점에서 사용자 공간의 데이터 버퍼가 커널 공간으로 복사되고, 소켓의 전송 큐에 추가됩니다.',
+      functions: ['__sys_sendto()', 'sock_sendmsg()'], 
+      position: { x: 0, y: 200 } 
+    },
+    { 
+      id: 'tcp-tx', 
+      label: 'TCP/IP', 
+      level: 'SOCKET', 
+      desc: 'TCP/IP 처리',
+      detailedDesc: 'TCP 계층에서는 tcp_sendmsg()가 호출되어 데이터를 TCP 세그먼트로 분할합니다. TCP 헤더를 추가하고, 흐름 제어, 혼잡 제어 알고리즘을 적용합니다. 그 후 IP 계층으로 전달하기 위해 ip_queue_xmit()을 호출합니다. 여기서 IP 헤더가 추가되고, 필요시 IP fragmentation이 수행됩니다.',
+      functions: ['tcp_sendmsg()', 'tcp_push()', 'ip_queue_xmit()'], 
+      position: { x: 200, y: 200 } 
+    },
+    { 
+      id: 'netfilter-tx-out', 
+      label: 'Netfilter OUTPUT', 
+      level: 'NETFILTER', 
+      desc: '출력 전 필터링',
+      detailedDesc: 'OUTPUT hook은 로컬 시스템에서 생성된 패킷이 네트워크로 나가기 전에 실행됩니다. 여기서 SNAT(Source NAT)의 일부와 방화벽 규칙이 적용됩니다. 로컬에서 생성된 패킷에 대한 필터링과 NAT 변환이 수행됩니다. NF_INET_LOCAL_OUT hook point에서 처리되며, ip_local_out() 함수가 이 hook을 호출합니다.',
+      functions: ['nf_hook()', 'ipv4_conntrack_local()', 'ip_local_out()'], 
+      position: { x: 400, y: 200 } 
+    },
+    { 
+      id: 'routing-tx', 
+      label: 'Routing', 
+      level: 'ROUTING', 
+      desc: '출력 라우팅',
+      detailedDesc: '출력 라우팅에서는 ip_route_output_flow() 함수가 호출되어 패킷의 목적지에 대한 최적의 경로를 결정합니다. 라우팅 테이블을 조회하여 다음 홉(next hop) 주소와 출력 인터페이스를 결정합니다. 이 정보는 skb에 저장되어 이후 단계에서 사용됩니다.',
+      functions: ['ip_route_output_flow()'], 
+      position: { x: 600, y: 200 } 
+    },
+    { 
+      id: 'netfilter-tx-post', 
+      label: 'Netfilter POSTROUTING', 
+      level: 'NETFILTER', 
+      desc: '라우팅 후 처리',
+      detailedDesc: 'POSTROUTING hook은 라우팅 결정 후, 패킷이 실제로 네트워크 인터페이스로 전송되기 직전에 실행되는 마지막 Netfilter hook입니다. 여기서 SNAT(Source NAT)의 최종 단계가 수행되고, 패킷의 소스 주소가 변경됩니다. 또한 마지막 방화벽 체크와 패킷 mangling이 수행됩니다. NF_INET_POST_ROUTING hook point에서 처리됩니다.',
+      functions: ['nf_hook()', 'ip_finish_output()'], 
+      position: { x: 800, y: 200 } 
+    },
+    { 
+      id: 'tc-tx', 
+      label: 'qdisc / TC', 
+      level: 'TC', 
+      desc: '트래픽 제어',
+      detailedDesc: 'qdisc(Queueing Discipline)와 TC(Traffic Control)는 패킷 전송을 제어하는 메커니즘입니다. dev_queue_xmit() 함수가 호출되면, 네트워크 인터페이스에 연결된 qdisc가 패킷을 큐에 추가하거나 즉시 전송합니다. 다양한 qdisc 알고리즘(fq, cake, pfifo_fast 등)이 사용될 수 있으며, 트래픽 shaping(대역폭 제한), policing(트래픽 제한), 스케줄링 등을 수행합니다. eBPF TC hook도 여기서 실행되어 커스텀 패킷 처리가 가능합니다.',
+      functions: ['dev_queue_xmit()', 'qdisc_run()', 'tc_classify()'], 
+      position: { x: 1000, y: 200 } 
+    },
+    { 
+      id: 'driver-tx', 
+      label: 'Driver', 
+      level: 'DRIVER', 
+      desc: '드라이버 전송',
+      detailedDesc: '드라이버의 ndo_start_xmit() 함수가 호출되어 패킷을 NIC 하드웨어로 전송합니다. 드라이버는 패킷을 하드웨어가 이해할 수 있는 형태로 변환하고, DMA를 통해 NIC의 전송 버퍼에 패킷을 복사합니다. 전송 완료 후에는 하드웨어 인터럽트를 통해 커널에 알립니다.',
+      functions: ['ndo_start_xmit()', 'netdev_start_xmit()'], 
+      position: { x: 1200, y: 200 } 
+    },
+    { 
+      id: 'nic-tx', 
+      label: 'NIC', 
+      level: 'HARDWARE', 
+      desc: '네트워크 카드로 전송',
+      detailedDesc: 'NIC 하드웨어는 DMA를 통해 커널 메모리에서 패킷 데이터를 읽어와 물리적 네트워크 케이블로 전송합니다. 이는 하드웨어 레벨에서 수행되며, 커널의 개입 없이 직접 메모리에서 데이터를 읽어 전송합니다. 전송 완료 후 하드웨어 인터럽트를 발생시켜 커널에 알립니다.',
+      functions: ['DMA'], 
+      position: { x: 1400, y: 200 } 
+    },
+    
+    // Netfilter TX Hook 세부
+    { 
+      id: 'nf:output', 
+      label: 'OUTPUT', 
+      level: 'NETFILTER', 
+      desc: '로컬 생성 패킷 처리',
+      detailedDesc: 'OUTPUT hook은 로컬 시스템에서 생성된 패킷에 대해 실행됩니다. 라우팅 결정 전에 실행되며, 로컬에서 생성된 패킷에 대한 필터링과 NAT를 수행합니다. SNAT의 초기 단계가 여기서 수행될 수 있습니다.',
+      functions: ['ip_local_out()'], 
+      parent: 'netfilter-tx-out', 
+      position: { x: 350, y: 300 } 
+    },
+    { 
+      id: 'nf:postrouting', 
+      label: 'POSTROUTING', 
+      level: 'NETFILTER', 
+      desc: '라우팅 후 최종 처리',
+      detailedDesc: 'POSTROUTING hook은 라우팅 결정 후, 패킷이 네트워크 인터페이스로 나가기 직전에 실행되는 마지막 hook입니다. SNAT의 최종 단계가 여기서 수행되며, 패킷의 소스 주소가 변경됩니다. 또한 마지막 방화벽 체크와 패킷 mangling이 수행됩니다.',
+      functions: ['ip_finish_output()'], 
+      parent: 'netfilter-tx-post', 
+      position: { x: 750, y: 300 } 
+    }
+  ],
+  edges: [
+    // RX 경로
+    { source: 'nic-rx', target: 'driver-rx' },
+    { source: 'driver-rx', target: 'napi-rx' },
+    { source: 'driver-rx', target: 'xdp-rx' },
+    { source: 'xdp-rx', target: 'skb-rx' },
+    { source: 'napi-rx', target: 'skb-rx' },
+    { source: 'skb-rx', target: 'netfilter-rx' },
+    { source: 'netfilter-rx', target: 'routing-rx' },
+    { source: 'routing-rx', target: 'socket-rx' },
+    
+    // Netfilter Hook 연결 (RX)
+    { source: 'netfilter-rx', target: 'nf:prerouting' },
+    { source: 'nf:prerouting', target: 'routing-rx' },
+    { source: 'routing-rx', target: 'nf:input' },
+    { source: 'routing-rx', target: 'nf:forward' },
+    { source: 'nf:input', target: 'socket-rx' },
+    
+    // TX 경로
+    { source: 'socket-tx', target: 'tcp-tx' },
+    { source: 'tcp-tx', target: 'netfilter-tx-out' },
+    { source: 'netfilter-tx-out', target: 'routing-tx' },
+    { source: 'routing-tx', target: 'netfilter-tx-post' },
+    { source: 'netfilter-tx-post', target: 'tc-tx' },
+    { source: 'tc-tx', target: 'driver-tx' },
+    { source: 'driver-tx', target: 'nic-tx' },
+    
+    // Netfilter Hook 연결 (TX)
+    { source: 'netfilter-tx-out', target: 'nf:output' },
+    { source: 'nf:output', target: 'routing-tx' },
+    { source: 'routing-tx', target: 'nf:postrouting' },
+    { source: 'nf:postrouting', target: 'tc-tx' }
+  ]
+};
+
+// Cytoscape 인스턴스 생성
+const cy = cytoscape({
+  container: document.getElementById('cy'),
+  
+  wheelSensitivity: 0.15,
+  minZoom: 0.2,
+  maxZoom: 4,
+  panningEnabled: true,
+  zoomingEnabled: true,
+  
+  style: [
+    {
+      selector: 'node',
+      style: {
+        'label': 'data(label)',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'color': '#fff',
+        'background-color': 'data(color)',
+        'width': 140,
+        'height': 60,
+        'font-size': 13,
+        'font-weight': 'bold',
+        'shape': 'roundrectangle',
+        'border-width': 2,
+        'border-color': '#fff',
+        'text-wrap': 'wrap',
+        'text-max-width': 130
+      }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'width': 3,
+        'line-color': '#60a5fa',
+        'target-arrow-color': '#60a5fa',
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'opacity': 0.7
+      }
+    },
+    {
+      selector: 'node[level = "HARDWARE"]',
+      style: {
+        'background-color': LEVEL_COLORS.HARDWARE
+      }
+    },
+    {
+      selector: 'node[level = "DRIVER"]',
+      style: {
+        'background-color': LEVEL_COLORS.DRIVER
+      }
+    },
+    {
+      selector: 'node[level = "KERNEL_LOW"]',
+      style: {
+        'background-color': LEVEL_COLORS.KERNEL_LOW
+      }
+    },
+    {
+      selector: 'node[level = "NETFILTER"]',
+      style: {
+        'background-color': LEVEL_COLORS.NETFILTER
+      }
+    },
+    {
+      selector: 'node[level = "ROUTING"]',
+      style: {
+        'background-color': LEVEL_COLORS.ROUTING
+      }
+    },
+    {
+      selector: 'node[level = "SOCKET"]',
+      style: {
+        'background-color': LEVEL_COLORS.SOCKET
+      }
+    },
+    {
+      selector: 'node[level = "XDP"]',
+      style: {
+        'background-color': LEVEL_COLORS.XDP
+      }
+    },
+    {
+      selector: 'node[level = "TC"]',
+      style: {
+        'background-color': LEVEL_COLORS.TC
+      }
+    }
+  ],
+  
+  elements: {
+    nodes: networkData.nodes.map(node => ({
+      data: {
+        id: node.id,
+        label: node.label,
+        level: node.level,
+        desc: node.desc,
+        detailedDesc: node.detailedDesc || '',
+        functions: node.functions || [],
+        color: LEVEL_COLORS[node.level] || '#666'
+      },
+      position: node.position,
+      classes: node.parent ? 'detail-node' : 'main-node'
+    })),
+    edges: networkData.edges.map(edge => ({
+      data: {
+        source: edge.source,
+        target: edge.target
+      }
+    }))
+  },
+  
+  layout: {
+    name: 'preset'
+  }
+});
+
+// 정보 패널 업데이트
+const info = document.getElementById('info');
+const zoomLevelDisplay = document.getElementById('zoom-level');
+
+function updateInfoPanel(node) {
+  const level = node.data('level');
+  const levelNames = {
+    'HARDWARE': '하드웨어',
+    'DRIVER': '드라이버',
+    'KERNEL_LOW': '커널 (저수준)',
+    'NETFILTER': 'Netfilter',
+    'ROUTING': '라우팅',
+    'SOCKET': '소켓',
+    'XDP': 'XDP',
+    'TC': '트래픽 제어'
+  };
+  
+  let html = `
+    <h3>${node.data('label')}</h3>
+    <p><span class="level-badge" style="background: ${node.data('color')}; color: #fff;">${levelNames[level] || level}</span></p>
+    <p class="desc"><strong>${node.data('desc')}</strong></p>
+  `;
+  
+  const detailedDesc = node.data('detailedDesc');
+  if (detailedDesc) {
+    html += `
+      <div style="margin-top: 16px;">
+        <p style="color: #9ca3af; line-height: 1.8; font-size: 14px;">${detailedDesc}</p>
+      </div>
+    `;
+  }
+  
+  const functions = node.data('functions');
+  if (functions && functions.length > 0) {
+    html += `
+      <div style="margin-top: 16px;">
+        <p><strong style="color: #7dd3fc;">주요 함수:</strong></p>
+        <ul class="function-list">
+          ${functions.map(fn => `<li>${fn}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  }
+  
+  info.innerHTML = html;
+}
+
+// 노드 클릭 이벤트
+cy.on('tap', 'node', evt => {
+  const node = evt.target;
+  updateInfoPanel(node);
+});
+
+// Zoom 이벤트 핸들러
+cy.on('zoom', () => {
+  const z = cy.zoom();
+  zoomLevelDisplay.textContent = `Zoom: ${z.toFixed(2)}x`;
+  
+  // 모든 노드는 항상 표시됨 (줌 레벨과 무관)
+});
+
+// 키보드 이벤트
+document.addEventListener('keydown', e => {
+  const pan = cy.pan();
+  const step = 80;
+  const zoomStep = 0.2;
+
+  switch (e.key) {
+    case 'ArrowUp':
+      cy.pan({ x: pan.x, y: pan.y + step });
+      break;
+    case 'ArrowDown':
+      cy.pan({ x: pan.x, y: pan.y - step });
+      break;
+    case 'ArrowLeft':
+      cy.pan({ x: pan.x + step, y: pan.y });
+      break;
+    case 'ArrowRight':
+      cy.pan({ x: pan.x - step, y: pan.y });
+      break;
+    case '+':
+    case '=':
+      cy.zoom(cy.zoom() + zoomStep);
+      break;
+    case '-':
+    case '_':
+      cy.zoom(cy.zoom() - zoomStep);
+      break;
+    case 'Escape':
+      cy.fit();
+      break;
+  }
+});
+
+// 초기 전체 보기
+cy.ready(() => {
+  cy.fit(50);
+  zoomLevelDisplay.textContent = `Zoom: ${cy.zoom().toFixed(2)}x`;
+});
+
+// 범례 추가
+const legendHtml = `
+  <div class="legend">
+    <h3>계층별 색상</h3>
+    <div class="legend-item">
+      <div class="legend-color" style="background: ${LEVEL_COLORS.HARDWARE};"></div>
+      <span>하드웨어 (NIC)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: ${LEVEL_COLORS.DRIVER};"></div>
+      <span>드라이버</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: ${LEVEL_COLORS.KERNEL_LOW};"></div>
+      <span>커널 저수준 (NAPI, skb)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: ${LEVEL_COLORS.XDP};"></div>
+      <span>XDP</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: ${LEVEL_COLORS.NETFILTER};"></div>
+      <span>Netfilter</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: ${LEVEL_COLORS.ROUTING};"></div>
+      <span>라우팅</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: ${LEVEL_COLORS.SOCKET};"></div>
+      <span>소켓</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: ${LEVEL_COLORS.TC};"></div>
+      <span>트래픽 제어 (TC/qdisc)</span>
+    </div>
+  </div>
+`;
+
+info.innerHTML += legendHtml;
+</script>
+
+</body>
+</html>
+
