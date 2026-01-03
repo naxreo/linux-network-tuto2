@@ -913,34 +913,102 @@ cy.on('tap', 'node', evt => {
   const node = evt.target;
   updateInfoPanel(node);
   
-  // 모든 노드의 outline 초기화
-  cy.nodes().style({
-    'border-width': 2,
-    'border-color': '#fff'
-  });
-  
   // 클릭된 노드와 연결된 모든 노드 찾기 (neighborhood)
   const connectedNodes = node.neighborhood('node');
+  const highlightedNodes = connectedNodes.add(node); // 연결된 노드 + 클릭된 노드
   
-  // 클릭된 노드 강조
-  node.style({
-    'border-width': 5,
-    'border-color': '#ef4444'
+  // 모든 노드 처리
+  cy.nodes().forEach(n => {
+    if (highlightedNodes.has(n)) {
+      // 강조된 노드: 붉은 윤곽선
+      if (n === node) {
+        n.style({
+          'border-width': 5,
+          'border-color': '#ef4444',
+          'background-color': n.data('color'),
+          'opacity': 1
+        });
+      } else {
+        n.style({
+          'border-width': 4,
+          'border-color': '#f87171',
+          'background-color': n.data('color'),
+          'opacity': 1
+        });
+      }
+    } else {
+      // 강조되지 않은 노드: 진회색
+      n.style({
+        'border-width': 2,
+        'border-color': '#fff',
+        'background-color': '#4b5563',
+        'opacity': 0.5
+      });
+    }
   });
   
-  // 연결된 노드들 강조
-  connectedNodes.style({
-    'border-width': 4,
-    'border-color': '#f87171'
+  // 모든 엣지 처리
+  cy.edges().forEach(e => {
+    const source = e.source();
+    const target = e.target();
+    const isHighlighted = highlightedNodes.has(source) || highlightedNodes.has(target);
+    
+    if (isHighlighted) {
+      // 강조된 엣지: 원래 색상 유지
+      const sourceLevel = e.data('sourceLevel');
+      if (sourceLevel === 'KERNEL_OPTION') {
+        e.style({
+          'line-color': LEVEL_COLORS.KERNEL_OPTION,
+          'target-arrow-color': LEVEL_COLORS.KERNEL_OPTION,
+          'opacity': 0.7
+        });
+      } else {
+        e.style({
+          'line-color': '#60a5fa',
+          'target-arrow-color': '#60a5fa',
+          'opacity': 0.7
+        });
+      }
+    } else {
+      // 강조되지 않은 엣지: 진회색
+      e.style({
+        'line-color': '#6b7280',
+        'target-arrow-color': '#6b7280',
+        'opacity': 0.3
+      });
+    }
   });
 });
 
-// 배경 클릭 시 outline 초기화
+// 배경 클릭 시 원래 색상으로 복원
 cy.on('tap', evt => {
   if (evt.target === cy) {
-    cy.nodes().style({
-      'border-width': 2,
-      'border-color': '#fff'
+    // 모든 노드를 원래 색상으로 복원
+    cy.nodes().forEach(n => {
+      n.style({
+        'border-width': 2,
+        'border-color': '#fff',
+        'background-color': n.data('color'),
+        'opacity': 1
+      });
+    });
+    
+    // 모든 엣지를 원래 색상으로 복원
+    cy.edges().forEach(e => {
+      const sourceLevel = e.data('sourceLevel');
+      if (sourceLevel === 'KERNEL_OPTION') {
+        e.style({
+          'line-color': LEVEL_COLORS.KERNEL_OPTION,
+          'target-arrow-color': LEVEL_COLORS.KERNEL_OPTION,
+          'opacity': 0.7
+        });
+      } else {
+        e.style({
+          'line-color': '#60a5fa',
+          'target-arrow-color': '#60a5fa',
+          'opacity': 0.7
+        });
+      }
     });
   }
 });
