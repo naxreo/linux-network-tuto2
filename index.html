@@ -174,7 +174,8 @@ const LEVEL_COLORS = {
   ROUTING: '#06b6d4',       // Routing - 청록색
   SOCKET: '#10b981',        // Socket - 초록색
   XDP: '#ec4899',           // XDP - 핑크색
-  TC: '#6366f1'             // TC/qdisc - 인디고색
+  TC: '#6366f1',            // TC/qdisc - 인디고색
+  BUFFER: '#14b8a6'         // Buffer - 틸색
 };
 
 // 노드 데이터 구조
@@ -189,6 +190,15 @@ const networkData = {
       detailedDesc: '물리적 네트워크 인터페이스 카드로, 전기 신호를 받아 패킷을 수신합니다. 패킷이 도착하면 DMA(Direct Memory Access)를 통해 커널 메모리의 ring buffer에 패킷을 직접 적재하고, 하드웨어 인터럽트를 발생시켜 커널에 패킷 수신을 알립니다.',
       functions: ['interrupt handler'], 
       position: { x: 0, y: -200 } 
+    },
+    { 
+      id: 'nic-rx-ring', 
+      label: 'NIC RX Ring', 
+      level: 'BUFFER', 
+      desc: 'NIC 수신 링 버퍼',
+      detailedDesc: 'NIC 하드웨어가 패킷을 수신할 때 DMA를 통해 커널 메모리에 직접 적재하는 링 버퍼입니다. 드라이버가 미리 할당한 메모리 영역으로, 하드웨어가 직접 접근할 수 있습니다. 패킷이 도착하면 이 버퍼에 저장되고, 드라이버가 이를 읽어서 처리합니다. 링 버퍼는 순환 구조로 되어 있어 고속 패킷 처리가 가능합니다.',
+      functions: ['DMA', 'ring buffer descriptor'], 
+      position: { x: 100, y: -150 } 
     },
     { 
       id: 'driver-rx', 
@@ -253,6 +263,24 @@ const networkData = {
       functions: ['tcp_v4_rcv()', 'sock_queue_rcv_skb()', 'sk_data_ready()'], 
       position: { x: 1200, y: -200 } 
     },
+    { 
+      id: 'tcp-rx-buffer', 
+      label: 'TCP RX Buffer', 
+      level: 'BUFFER', 
+      desc: 'TCP 수신 버퍼',
+      detailedDesc: 'TCP 수신 버퍼는 TCP 프로토콜이 수신한 데이터를 저장하는 버퍼입니다. 순서가 맞지 않은 패킷을 재정렬하거나, 애플리케이션이 읽을 때까지 데이터를 보관합니다. 이 버퍼의 크기는 SO_RCVBUF 소켓 옵션으로 설정할 수 있으며, TCP 흐름 제어와 혼잡 제어에 중요한 역할을 합니다.',
+      functions: ['tcp_rcv_established()', 'tcp_data_queue()'], 
+      position: { x: 1200, y: -150 } 
+    },
+    { 
+      id: 'socket-rx-queue', 
+      label: 'Socket RX Queue', 
+      level: 'BUFFER', 
+      desc: '소켓 수신 큐',
+      detailedDesc: '소켓의 수신 큐(sk_receive_queue)는 커널에서 사용자 공간으로 전달될 패킷을 저장하는 큐입니다. TCP/UDP 등 프로토콜 계층에서 처리된 패킷이 이 큐에 추가되고, 사용자 공간의 recv(), read() 등의 시스템 콜이 이 큐에서 데이터를 읽어갑니다. 큐가 비어있으면 프로세스가 블로킹되고, 데이터가 도착하면 wakeup 신호를 받아 깨어납니다.',
+      functions: ['sock_queue_rcv_skb()', 'skb_queue_tail()', 'sk_data_ready()'], 
+      position: { x: 1350, y: -200 } 
+    },
     
     // Netfilter Hook 세부
     { 
@@ -295,6 +323,24 @@ const networkData = {
       detailedDesc: '사용자 공간에서 send(), sendto(), write() 등의 시스템 콜을 호출하면, 커널의 __sys_sendto() 함수가 호출됩니다. 이 함수는 sock_sendmsg()를 통해 소켓에 데이터를 전달합니다. 이 시점에서 사용자 공간의 데이터 버퍼가 커널 공간으로 복사되고, 소켓의 전송 큐에 추가됩니다.',
       functions: ['__sys_sendto()', 'sock_sendmsg()'], 
       position: { x: 0, y: 200 } 
+    },
+    { 
+      id: 'socket-tx-queue', 
+      label: 'Socket TX Queue', 
+      level: 'BUFFER', 
+      desc: '소켓 송신 큐',
+      detailedDesc: '소켓의 송신 큐(sk_write_queue)는 사용자 공간에서 전송 요청된 데이터를 저장하는 큐입니다. send(), sendto() 등의 시스템 콜로 전달된 데이터가 이 큐에 추가되고, TCP/IP 계층에서 순차적으로 처리됩니다. 큐가 가득 차면 프로세스가 블로킹될 수 있습니다.',
+      functions: ['sock_alloc_send_skb()', 'skb_queue_tail()'], 
+      position: { x: -150, y: 200 } 
+    },
+    { 
+      id: 'tcp-tx-buffer', 
+      label: 'TCP TX Buffer', 
+      level: 'BUFFER', 
+      desc: 'TCP 송신 버퍼',
+      detailedDesc: 'TCP 송신 버퍼는 TCP 프로토콜이 전송할 데이터를 저장하는 버퍼입니다. 애플리케이션에서 전송 요청한 데이터가 이 버퍼에 저장되고, TCP 흐름 제어와 혼잡 제어 알고리즘에 따라 세그먼트로 분할되어 전송됩니다. 이 버퍼의 크기는 SO_SNDBUF 소켓 옵션으로 설정할 수 있으며, 버퍼가 가득 차면 애플리케이션이 블로킹됩니다.',
+      functions: ['tcp_sendmsg()', 'tcp_write_xmit()'], 
+      position: { x: 200, y: 250 } 
     },
     { 
       id: 'tcp-tx', 
@@ -342,6 +388,15 @@ const networkData = {
       position: { x: 1000, y: 200 } 
     },
     { 
+      id: 'qdisc-queue', 
+      label: 'qdisc Queue', 
+      level: 'BUFFER', 
+      desc: 'qdisc 큐',
+      detailedDesc: 'qdisc 큐는 트래픽 제어를 위해 패킷을 임시로 저장하는 큐입니다. dev_queue_xmit()에서 패킷이 도착하면, 설정된 qdisc 알고리즘에 따라 패킷이 큐에 추가되거나 즉시 전송됩니다. 큐의 크기와 동작 방식은 qdisc 타입에 따라 다릅니다. pfifo_fast는 단순 FIFO, fq는 공정 큐잉, cake는 고급 트래픽 제어를 제공합니다. 큐가 가득 차면 패킷이 드롭될 수 있습니다.',
+      functions: ['qdisc_enqueue()', 'qdisc_dequeue()', 'qdisc_run()'], 
+      position: { x: 1000, y: 250 } 
+    },
+    { 
       id: 'driver-tx', 
       label: 'Driver', 
       level: 'DRIVER', 
@@ -349,6 +404,15 @@ const networkData = {
       detailedDesc: '드라이버의 ndo_start_xmit() 함수가 호출되어 패킷을 NIC 하드웨어로 전송합니다. 드라이버는 패킷을 하드웨어가 이해할 수 있는 형태로 변환하고, DMA를 통해 NIC의 전송 버퍼에 패킷을 복사합니다. 전송 완료 후에는 하드웨어 인터럽트를 통해 커널에 알립니다.',
       functions: ['ndo_start_xmit()', 'netdev_start_xmit()'], 
       position: { x: 1200, y: 200 } 
+    },
+    { 
+      id: 'nic-tx-ring', 
+      label: 'NIC TX Ring', 
+      level: 'BUFFER', 
+      desc: 'NIC 송신 링 버퍼',
+      detailedDesc: 'NIC 하드웨어의 전송 링 버퍼는 드라이버가 전송할 패킷을 저장하는 하드웨어 버퍼입니다. 드라이버가 패킷을 이 버퍼에 DMA로 복사하면, NIC 하드웨어가 자동으로 패킷을 네트워크 케이블로 전송합니다. 링 버퍼는 순환 구조로 되어 있어 연속적인 패킷 전송이 가능합니다. 전송 완료 후 하드웨어 인터럽트를 통해 드라이버에 알립니다.',
+      functions: ['DMA', 'ring buffer descriptor'], 
+      position: { x: 1300, y: 250 } 
     },
     { 
       id: 'nic-tx', 
@@ -384,7 +448,8 @@ const networkData = {
   ],
   edges: [
     // RX 경로
-    { source: 'nic-rx', target: 'driver-rx' },
+    { source: 'nic-rx', target: 'nic-rx-ring' },
+    { source: 'nic-rx-ring', target: 'driver-rx' },
     { source: 'driver-rx', target: 'napi-rx' },
     { source: 'driver-rx', target: 'xdp-rx' },
     { source: 'xdp-rx', target: 'skb-rx' },
@@ -392,6 +457,8 @@ const networkData = {
     { source: 'skb-rx', target: 'netfilter-rx' },
     { source: 'netfilter-rx', target: 'routing-rx' },
     { source: 'routing-rx', target: 'socket-rx' },
+    { source: 'socket-rx', target: 'tcp-rx-buffer' },
+    { source: 'socket-rx', target: 'socket-rx-queue' },
     
     // Netfilter Hook 연결 (RX)
     { source: 'netfilter-rx', target: 'nf:prerouting' },
@@ -401,13 +468,18 @@ const networkData = {
     { source: 'nf:input', target: 'socket-rx' },
     
     // TX 경로
+    { source: 'socket-tx-queue', target: 'socket-tx' },
     { source: 'socket-tx', target: 'tcp-tx' },
+    { source: 'socket-tx', target: 'tcp-tx-buffer' },
+    { source: 'tcp-tx-buffer', target: 'tcp-tx' },
     { source: 'tcp-tx', target: 'netfilter-tx-out' },
     { source: 'netfilter-tx-out', target: 'routing-tx' },
     { source: 'routing-tx', target: 'netfilter-tx-post' },
     { source: 'netfilter-tx-post', target: 'tc-tx' },
-    { source: 'tc-tx', target: 'driver-tx' },
-    { source: 'driver-tx', target: 'nic-tx' },
+    { source: 'tc-tx', target: 'qdisc-queue' },
+    { source: 'qdisc-queue', target: 'driver-tx' },
+    { source: 'driver-tx', target: 'nic-tx-ring' },
+    { source: 'nic-tx-ring', target: 'nic-tx' },
     
     // Netfilter Hook 연결 (TX)
     { source: 'netfilter-tx-out', target: 'nf:output' },
@@ -505,6 +577,12 @@ const cy = cytoscape({
       style: {
         'background-color': LEVEL_COLORS.TC
       }
+    },
+    {
+      selector: 'node[level = "BUFFER"]',
+      style: {
+        'background-color': LEVEL_COLORS.BUFFER
+      }
     }
   ],
   
@@ -549,7 +627,8 @@ function updateInfoPanel(node) {
     'ROUTING': '라우팅',
     'SOCKET': '소켓',
     'XDP': 'XDP',
-    'TC': '트래픽 제어'
+    'TC': '트래픽 제어',
+    'BUFFER': '버퍼'
   };
   
   let html = `
@@ -670,6 +749,10 @@ const legendHtml = `
     <div class="legend-item">
       <div class="legend-color" style="background: ${LEVEL_COLORS.TC};"></div>
       <span>트래픽 제어 (TC/qdisc)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: ${LEVEL_COLORS.BUFFER};"></div>
+      <span>버퍼 (Buffer/Queue)</span>
     </div>
   </div>
 `;
