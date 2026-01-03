@@ -549,13 +549,31 @@ const networkData = {
       position: { x: 1800, y: -400 } 
     },
     { 
-      id: 'rst-tcp', 
+      id: 'rst-tcp-rx', 
       label: 'TCP RST', 
       level: 'RST', 
-      desc: 'TCP RST 전송',
-      detailedDesc: 'TCP 연결이 비정상적으로 종료되거나 거부될 때 RST(Reset) 패킷이 전송됩니다.\n\n발생 원인:\n- 존재하지 않는 포트로의 연결 시도: 애플리케이션이 해당 포트에서 리스닝하지 않음\n- 연결 상태 불일치: CLOSED 상태의 소켓으로 패킷 수신\n- 애플리케이션 강제 종료: close() 호출 또는 프로세스 종료\n- 타임아웃: 연결 타임아웃 발생\n- 보안 정책: 방화벽이나 애플리케이션이 연결 거부\n\nRST 패킷 특징:\n- TCP 헤더의 RST 플래그가 1로 설정됨\n- 연결을 즉시 종료, 재사용 불가\n- SYN 패킷에 대한 RST: 포트가 닫혀있음을 의미\n- ESTABLISHED 연결에 대한 RST: 연결 강제 종료\n\n일반적인 시나리오:\n1. 클라이언트가 존재하지 않는 포트로 SYN 전송 → 서버가 RST 응답\n2. 타임아웃된 연결로 패킷 수신 → RST 전송\n3. 애플리케이션이 소켓을 닫은 후 패킷 수신 → RST 전송\n\nRST vs FIN:\n- FIN: 정상적인 연결 종료 (4-way handshake)\n- RST: 비정상적인 연결 종료 (즉시 종료)',
+      desc: 'TCP RST 전송 (RX 경로)',
+      detailedDesc: 'TCP 수신 경로에서 연결이 비정상적으로 종료되거나 거부될 때 RST(Reset) 패킷이 전송됩니다.\n\n발생 원인:\n- 존재하지 않는 포트로의 연결 시도: 애플리케이션이 해당 포트에서 리스닝하지 않음\n- CLOSED 상태의 소켓으로 패킷 수신: 이미 닫힌 소켓으로 패킷이 도착\n- 타임아웃된 연결로 패킷 수신: 연결 타임아웃 후 패킷 도착\n- 잘못된 연결 상태: ESTABLISHED가 아닌 상태로 패킷 수신\n\nRST 패킷 특징:\n- TCP 헤더의 RST 플래그가 1로 설정됨\n- 연결을 즉시 종료, 재사용 불가\n- SYN 패킷에 대한 RST: 포트가 닫혀있음을 의미\n- ESTABLISHED 연결에 대한 RST: 연결 강제 종료\n\n일반적인 시나리오:\n1. 클라이언트가 존재하지 않는 포트로 SYN 전송 → 서버가 RST 응답\n2. 타임아웃된 연결로 패킷 수신 → RST 전송\n3. 애플리케이션이 소켓을 닫은 후 패킷 수신 → RST 전송\n\nRST vs FIN:\n- FIN: 정상적인 연결 종료 (4-way handshake)\n- RST: 비정상적인 연결 종료 (즉시 종료)',
       functions: ['tcp_send_active_reset()', 'tcp_reset()', 'inet_csk_reqsk_queue_drop()'], 
       position: { x: 1800, y: -450 } 
+    },
+    { 
+      id: 'rst-tcp-tx', 
+      label: 'TCP RST', 
+      level: 'RST', 
+      desc: 'TCP RST 전송 (TX 경로)',
+      detailedDesc: 'TCP 송신 경로에서 애플리케이션이 연결을 강제 종료할 때 RST(Reset) 패킷이 전송됩니다.\n\n발생 원인:\n- 애플리케이션 강제 종료: close() 호출 시 소켓이 ESTABLISHED 상태가 아닌 경우\n- 프로세스 종료: 애플리케이션이 비정상 종료되거나 kill 신호를 받은 경우\n- 소켓 옵션 설정: SO_LINGER 옵션으로 즉시 종료 설정 시\n- 타임아웃: 송신 타임아웃 발생 시 연결 강제 종료\n- 에러 발생: 네트워크 에러나 시스템 에러로 인한 강제 종료\n\nRST 전송 과정:\n1. 애플리케이션이 close() 호출 또는 프로세스 종료\n2. tcp_close() 함수에서 연결 상태 확인\n3. ESTABLISHED 상태가 아니거나 즉시 종료가 필요한 경우\n4. tcp_send_active_reset() 호출하여 RST 패킷 생성\n5. 네트워크 스택을 통해 RST 패킷 전송\n\n일반적인 시나리오:\n1. 애플리케이션이 close() 호출 → 소켓이 CLOSED 상태로 전환 → RST 전송\n2. 프로세스가 SIGKILL로 종료 → 열려있는 소켓들이 RST로 종료\n3. SO_LINGER 옵션으로 즉시 종료 설정 → close() 시 RST 전송',
+      functions: ['tcp_close()', 'tcp_send_active_reset()', 'inet_csk_reqsk_queue_drop()'], 
+      position: { x: 0, y: 400 } 
+    },
+    { 
+      id: 'rst-netfilter', 
+      label: 'TCP RST', 
+      level: 'RST', 
+      desc: 'Netfilter REJECT (TCP RST)',
+      detailedDesc: 'Netfilter에서 REJECT 규칙이 적용될 때 TCP 연결의 경우 RST 패킷이 전송됩니다.\n\n발생 원인:\n- iptables REJECT 규칙: INPUT/FORWARD/OUTPUT 체인에서 REJECT 규칙 매칭\n- REJECT with --reject-with tcp-reset: 명시적으로 TCP RST를 지정한 경우\n- 상태 기반 방화벽: INVALID 상태의 TCP 패킷에 대한 REJECT\n\nREJECT vs DROP:\n- DROP: 패킷을 조용히 폐기, 상대방은 타임아웃 대기\n- REJECT: 패킷 폐기 + 응답 전송\n  - TCP: RST 패킷 전송\n  - UDP: ICMP port unreachable 전송\n  - ICMP: ICMP protocol unreachable 전송\n\nREJECT 옵션:\n- --reject-with tcp-reset: TCP RST 패킷 전송 (TCP만)\n- --reject-with icmp-port-unreachable: ICMP port unreachable (기본값)\n- --reject-with icmp-net-unreachable: ICMP network unreachable\n\n일반적인 사용 사례:\n1. 특정 포트로의 연결을 명시적으로 거부하고 싶을 때\n2. 상대방이 즉시 연결 실패를 인지하도록 할 때\n3. DROP 대신 REJECT를 사용하여 타임아웃 대기 시간을 줄일 때\n\n주의사항:\n- REJECT는 응답 패킷을 생성하므로 DROP보다 약간 더 많은 리소스 사용\n- 일부 공격 시나리오에서는 DROP이 더 안전할 수 있음',
+      functions: ['nf_send_reset()', 'nf_reject_ipv4()'], 
+      position: { x: 1200, y: -500 } 
     },
     { 
       id: 'drop-qdisc', 
@@ -758,7 +776,13 @@ const networkData = {
     { source: 'routing-rx', target: 'drop-routing' },
     { source: 'routing-tx', target: 'drop-routing' },
     { source: 'socket-rx', target: 'drop-tcp' },
-    { source: 'socket-rx', target: 'rst-tcp' },
+    { source: 'socket-rx', target: 'rst-tcp-rx' },
+    { source: 'socket-tx', target: 'rst-tcp-tx' },
+    { source: 'netfilter-rx', target: 'rst-netfilter' },
+    { source: 'nf:input', target: 'rst-netfilter' },
+    { source: 'nf:forward', target: 'rst-netfilter' },
+    { source: 'nf:output', target: 'rst-netfilter' },
+    { source: 'netfilter-tx-out', target: 'rst-netfilter' },
     { source: 'qdisc-queue', target: 'drop-qdisc' },
     
     // 커널 옵션 연결
