@@ -31,7 +31,11 @@ docker run -d -p 8080:80 --name network-map linux-network-map
 
 ### 실행
 
-브라우저에서 `http://localhost:8080`으로 접속하세요.
+브라우저에서 접속:
+- 네트워크 흐름도: `http://localhost:8080/index.html`
+- 실습 튜토리얼: `http://localhost:8080/tutorial.html`
+
+두 페이지는 상호 링크로 연결되어 있습니다.
 
 ### 중지 및 제거
 ```bash
@@ -46,6 +50,7 @@ docker rm network-map
 - **패킷 드롭 및 RST**: 드롭과 RST 발생 지점 표시
 - **커널 옵션**: 각 기능과 연관된 커널 옵션 표시
 - **상세 설명**: 각 노드의 역할, 동작 방식, sysctl 설정 등 상세 정보 제공
+- **실습 튜토리얼**: 두 대의 리눅스 장비와 nginx를 사용한 단계별 실습 가이드 (`tutorial.html`)
 
 ## 오프라인 환경
 

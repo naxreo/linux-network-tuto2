@@ -8,8 +8,9 @@ RUN apk add --no-cache curl && \
     curl -L https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js -o /usr/share/nginx/html/js/cytoscape.min.js && \
     apk del curl
 
-# index.html 복사
+# HTML 파일들 복사
 COPY index.html /usr/share/nginx/html/
+COPY tutorial.html /usr/share/nginx/html/
 
 # nginx 설정 (기본 설정 사용)
 EXPOSE 80

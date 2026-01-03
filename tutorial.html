@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>리눅스 네트워크 스택 실습 튜토리얼</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      line-height: 1.6;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #1a1a1a;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+    
+    .nav-link {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(26, 26, 26, 0.95);
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      z-index: 1000;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .nav-link a {
+      color: #60a5fa;
+      text-decoration: none;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    
+    .nav-link a:hover {
+      color: #7dd3fc;
+    }
+    
+    h1 {
+      color: #7dd3fc;
+      border-bottom: 3px solid #2563eb;
+      padding-bottom: 10px;
+      margin-bottom: 30px;
+      font-size: 2.5em;
+    }
+    
+    h2 {
+      color: #60a5fa;
+      margin-top: 40px;
+      margin-bottom: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #333;
+      font-size: 2em;
+      scroll-margin-top: 80px;
+    }
+    
+    h3 {
+      color: #94a3b8;
+      margin-top: 30px;
+      margin-bottom: 15px;
+      font-size: 1.5em;
+    }
+    
+    h4 {
+      color: #9ca3af;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      font-size: 1.2em;
+    }
+    
+    p {
+      margin: 15px 0;
+      color: #d1d5db;
+    }
+    
+    pre {
+      background: #0f0f0f;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 15px;
+      overflow-x: auto;
+      margin: 20px 0;
+    }
+    
+    code {
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      color: #60a5fa;
+      background: rgba(96, 165, 250, 0.1);
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    
+    pre code {
+      color: #e5e5e5;
+      display: block;
+      background: transparent;
+      padding: 0;
+    }
+    
+    ul, ol {
+      margin: 15px 0;
+      padding-left: 30px;
+    }
+    
+    li {
+      margin: 8px 0;
+      color: #d1d5db;
+    }
+    
+    a {
+      color: #60a5fa;
+      text-decoration: none;
+    }
+    
+    a:hover {
+      color: #7dd3fc;
+      text-decoration: underline;
+    }
+    
+    strong {
+      color: #fbbf24;
+      font-weight: bold;
+    }
+    
+    hr {
+      border: none;
+      border-top: 1px solid #333;
+      margin: 40px 0;
+    }
+    
+    .toc {
+      background: #0f0f0f;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 20px;
+      margin: 30px 0;
+    }
+    
+    .toc h2 {
+      margin-top: 0;
+      border-top: none;
+      padding-top: 0;
+    }
+    
+    .toc ul {
+      list-style: none;
+      padding-left: 0;
+    }
+    
+    .toc li {
+      margin: 10px 0;
+    }
+    
+    .toc a {
+      color: #60a5fa;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-link">
+    <a href="index.html">← 네트워크 흐름도</a>
+  </div>
+  
+  <div class="container">
+<h1>리눅스 네트워크 스택 실습 튜토리얼</h1>
+<p>이 튜토리얼은 두 대의 리눅스 장비와 nginx를 사용하여 TCP/IP 네트워크 데이터 흐름과 커널의 동작을 단계별로 확인하고 실습할 수 있도록 구성되었습니다.</p>
+<h2 id="목차">목차</h2>
+<ol>
+<li><a href="#1-환경-구성">환경 구성</a></li>
+<li><a href="#2-nic-및-driver-레벨-실습">NIC 및 Driver 레벨 실습</a></li>
+<li><a href="#3-napi-레벨-실습">NAPI 레벨 실습</a></li>
+<li><a href="#4-sk_buff-레벨-실습">sk_buff 레벨 실습</a></li>
+<li><a href="#5-netfilter-hook-실습">Netfilter Hook 실습</a></li>
+<li><a href="#6-routing-레벨-실습">Routing 레벨 실습</a></li>
+<li><a href="#7-socket-레벨-실습">Socket 레벨 실습</a></li>
+<li><a href="#8-tcp-레벨-실습">TCP 레벨 실습</a></li>
+<li><a href="#9-qdisctc-레벨-실습">qdisc/TC 레벨 실습</a></li>
+<li><a href="#10-패킷-드롭-및-rst-확인-실습">패킷 드롭 및 RST 확인 실습</a></li>
+<li><a href="#11-전체-흐름-추적">전체 흐름 추적</a></li>
+</ol>
+<hr>
+<h2 id="1-환경-구성">1. 환경 구성</h2>
+<h3>1.1 두 대의 리눅스 장비 준비</h3>
+<strong>옵션 A: 물리적 장비</strong>
+<ul>
+<li>두 대의 리눅스 서버 (Ubuntu 20.04 이상 권장)</li>
+<li>네트워크 케이블로 직접 연결 또는 같은 네트워크에 연결</li>
+</ul>
+<strong>옵션 B: 가상 환경 (Docker/Vagrant)</strong>
+<ul>
+<li>Docker Compose를 사용한 가상 환경 구성</li>
+</ul>
+<strong>옵션 C: 단일 장비에서 네임스페이스 사용</strong>
+<ul>
+<li>네트워크 네임스페이스를 사용하여 두 개의 가상 네트워크 인터페이스 생성</li>
+</ul>
+<h3>1.2 네트워크 설정</h3>
+<h4>서버 측 (nginx 서버)</h4>
+<pre><code class="language-bash"># IP 주소 설정 (예시)
+sudo ip addr add 192.168.100.10/24 dev eth0
+sudo ip link set eth0 up
+
+# 호스트명 설정
+sudo hostnamectl set-hostname server
+
+# 방화벽 확인 (필요시 포트 80, 443 허용)
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+</code></pre>
+<h4>클라이언트 측</h4>
+<pre><code class="language-bash"># IP 주소 설정 (예시)
+sudo ip addr add 192.168.100.20/24 dev eth0
+sudo ip link set eth0 up
+
+# 호스트명 설정
+sudo hostnamectl set-hostname client
+
+# 서버로의 연결 테스트
+ping -c 3 192.168.100.10
+</code></pre>
+<h3>1.3 nginx 설치 및 설정</h3>
+<h4>서버 측에서 nginx 설치</h4>
+<pre><code class="language-bash"># Ubuntu/Debian
+sudo apt update
+sudo apt install -y nginx
+
+# CentOS/RHEL
+sudo yum install -y nginx
+</code></pre>
+<h4>nginx 기본 설정 확인</h4>
+<pre><code class="language-bash"># nginx 상태 확인
+sudo systemctl status nginx
+
+# nginx 시작
+sudo systemctl start nginx
+sudo systemctl enable nginx
+
+# 기본 페이지 생성
+echo "Hello from Linux Network Stack Tutorial" | sudo tee /var/www/html/index.html
+</code></pre>
+<h4>nginx 설정 파일 수정 (로깅 강화)</h4>
+<pre><code class="language-bash">sudo nano /etc/nginx/nginx.conf
+</code></pre>
+<p>다음과 같이 로깅 설정 추가:
+<pre><code class="language-nginx">http {
+    log_format detailed '$remote_addr - $remote_user [$time_local] '
+                       '"$request" $status $body_bytes_sent '
+                       '"$http_referer" "$http_user_agent" '
+                       'rt=$request_time uct="$upstream_connect_time" '
+                       'uht="$upstream_header_time" urt="$upstream_response_time"';
+    
+    access_log /var/log/nginx/access.log detailed;
+    error_log /var/log/nginx/error.log debug;
+    
+    # ... 기타 설정
+}
+</code></pre></p>
+<p>설정 적용:
+<pre><code class="language-bash">sudo nginx -t
+sudo systemctl reload nginx
+</code></pre></p>
+<h3>1.4 필수 도구 설치</h3>
+<h4>서버 및 클라이언트 모두에서 설치</h4>
+<pre><code class="language-bash"># 네트워크 모니터링 도구
+sudo apt install -y tcpdump wireshark-common net-tools iproute2
+
+# 커널 추적 도구
+sudo apt install -y linux-tools-common linux-tools-generic
+sudo apt install -y trace-cmd
+
+# 기타 유틸리티
+sudo apt install -y curl wget htop iotop ethtool
+
+# eBPF 도구 (선택사항)
+sudo apt install -y bpfcc-tools
+</code></pre>
+<hr>
+<h2 id="2-nic-및-driver-레벨-실습">2. NIC 및 Driver 레벨 실습</h2>
+<h3>2.1 이론</h3>
+<strong>NIC (Network Interface Card) 레벨</strong>은 물리적 네트워크 인터페이스에서 패킷을 수신하는 최하위 레벨입니다.
+<ul>
+<li><strong>RX Ring Buffer</strong>: NIC가 패킷을 수신할 때 DMA를 통해 커널 메모리에 직접 적재하는 링 버퍼</li>
+<li><strong>인터럽트</strong>: 패킷 수신 시 하드웨어 인터럽트 발생</li>
+<li><strong>Driver</strong>: NIC 하드웨어와 커널을 연결하는 드라이버</li>
+</ul>
+<h3>2.2 실습: NIC 통계 확인</h3>
+<h4>서버 측에서 실행</h4>
+<p><pre><code class="language-bash"># 네트워크 인터페이스 확인
+ip link show
+
+# NIC 통계 확인 (RX/TX 패킷 수, 드롭 등)
+cat /proc/net/dev
+
+# 더 자세한 통계 (ethtool 사용)
+sudo ethtool -S eth0 | grep -E "rx|tx|drop|error"
+
+# 실시간 통계 모니터링
+watch -n 1 'cat /proc/net/dev'
+</code></pre></p>
+<strong>예상 결과:</strong>
+<pre><code class="language-bash">Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+  eth0: 1234567    1234    0    0    0     0          0         0  9876543    987    0    0    0     0       0          0
+</code></pre>
+<h3>2.3 실습: RX Ring Buffer 확인</h3>
+<p><pre><code class="language-bash"># RX Ring Buffer 크기 확인
+sudo ethtool -g eth0
+
+# RX Ring Buffer 크기 조정 (예: 4096으로 증가)
+sudo ethtool -G eth0 rx 4096
+
+# 변경 확인
+sudo ethtool -g eth0
+</code></pre></p>
+<strong>예상 결과:</strong>
+<pre><code class="language-bash">Ring parameters for eth0:
+Pre-set maximums:
+RX:     4096
+RX Mini:    0
+RX Jumbo:  4096
+TX:     4096
+Current hardware settings:
+RX:     4096
+RX Mini:    0
+RX Jumbo:  4096
+TX:     4096
+</code></pre>
+<h3>2.4 실습: 인터럽트 확인</h3>
+<p><pre><code class="language-bash"># 네트워크 인터페이스의 인터럽트 번호 확인
+grep eth0 /proc/interrupts
+
+# 실시간 인터럽트 모니터링
+watch -n 1 'grep eth0 /proc/interrupts'
+
+# 인터럽트 통계 확인
+cat /proc/softirqs | grep NET
+</code></pre></p>
+<strong>예상 결과:</strong>
+<pre><code class="language-bash">           CPU0       CPU1       CPU2       CPU3
+ 24:   12345678          0          0          0   PCI-MSI-edge      eth0
+</code></pre>
+<h3>2.5 실습: 패킷 수신 시뮬레이션</h3>
+<h4>클라이언트에서 서버로 패킷 전송</h4>
+<pre><code class="language-bash"># 서버로 ping 전송 (ICMP 패킷)
+ping -c 100 192.168.100.10
+
+# 서버에서 통계 확인
+watch -n 1 'cat /proc/net/dev | grep eth0'
+</code></pre>
+<h4>서버에서 인터럽트 증가 확인</h4>
+<pre><code class="language-bash"># 인터럽트 카운트 확인
+watch -n 1 'grep eth0 /proc/interrupts'
+</code></pre>
+<hr>
+<h2 id="3-napi-레벨-실습">3. NAPI 레벨 실습</h2>
+<h3>3.1 이론</h3>
+<strong>NAPI (New API)</strong>는 고속 네트워크 환경에서 인터럽트 폭주를 방지하기 위한 메커니즘입니다.
+<ul>
+<li><strong>인터럽트 → 폴링 전환</strong>: 초기 인터럽트 후 폴링 모드로 전환</li>
+<li><strong>NAPI 구조체</strong>: <code>struct napi_struct</code>로 관리</li>
+<li><strong>GRO (Generic Receive Offload)</strong>: 여러 작은 패킷을 하나로 합침</li>
+</ul>
+<h3>3.2 실습: NAPI 통계 확인</h3>
+<p><pre><code class="language-bash"># NAPI 관련 커널 파라미터 확인
+sysctl net.core.netdev_max_backlog
+sysctl net.core.netdev_budget
+sysctl net.core.netdev_budget_usecs
+
+# NAPI 통계 확인 (커널 메시지)
+dmesg | grep -i napi
+
+# 실시간 NAPI 통계 (perf 사용)
+sudo perf stat -e 'net:*' -a sleep 5
+</code></pre></p>
+<h3>3.3 실습: GRO 활성화/비활성화</h3>
+<p><pre><code class="language-bash"># GRO 상태 확인
+ethtool -k eth0 | grep generic-receive-offload
+
+# GRO 비활성화
+sudo ethtool -K eth0 gro off
+
+# GRO 활성화
+sudo ethtool -K eth0 gro on
+
+# 변경 확인
+ethtool -k eth0 | grep generic-receive-offload
+</code></pre></p>
+<h3>3.4 실습: netdev_max_backlog 조정</h3>
+<p><pre><code class="language-bash"># 현재 값 확인
+sysctl net.core.netdev_max_backlog
+
+# 값 증가 (예: 2000으로)
+sudo sysctl -w net.core.netdev_max_backlog=2000
+
+# 영구 적용
+echo "net.core.netdev_max_backlog = 2000" | sudo tee -a /etc/sysctl.conf
+
+# 패킷 드롭 모니터링
+watch -n 1 'cat /proc/net/dev | grep -E "drop|errs"'
+</code></pre></p>
+<h3>3.5 실습: 고속 트래픽 생성 및 NAPI 동작 확인</h3>
+<h4>클라이언트에서 고속 트래픽 생성</h4>
+<pre><code class="language-bash"># 서버로 대량의 패킷 전송
+for i in {1..1000}; do
+    curl -s http://192.168.100.10/ > /dev/null
+done
+
+# 또는 더 강한 트래픽
+ab -n 10000 -c 100 http://192.168.100.10/
+</code></pre>
+<h4>서버에서 NAPI 동작 확인</h4>
+<pre><code class="language-bash"># 인터럽트 vs 폴링 모드 확인
+watch -n 1 'cat /proc/interrupts | grep eth0'
+
+# 백로그 상태 확인
+watch -n 1 'cat /proc/net/softnet_stat'
+</code></pre>
+<hr>
+<h2 id="4-sk_buff-레벨-실습">4. sk_buff 레벨 실습</h2>
+<h3>4.1 이론</h3>
+<strong>sk_buff (socket buffer)</strong>는 리눅스 커널에서 모든 네트워크 패킷을 표현하는 핵심 데이터 구조입니다.
+<ul>
+<li><strong>패킷 데이터와 메타데이터</strong>: 프로토콜, 길이, 네트워크 인터페이스, 라우팅 정보 등</li>
+<li><strong>네트워크 스택 통과</strong>: 각 계층에서 필요한 정보 추가/수정</li>
+<li><strong>주요 함수</strong>: <code>build_skb()</code>, <code>netif_receive_skb()</code></li>
+</ul>
+<h3>4.2 실습: sk_buff 통계 확인</h3>
+<p><pre><code class="language-bash"># 네트워크 스택 통계 확인
+cat /proc/net/sockstat
+
+# TCP 소켓 통계
+cat /proc/net/sockstat6
+
+# 더 자세한 통계
+ss -s
+</code></pre></p>
+<strong>예상 결과:</strong>
+<pre><code class="language-bash">sockets: used 123
+TCP: inuse 10 orphan 0 tw 0 alloc 20 mem 5
+UDP: inuse 5
+UDPLITE: inuse 0
+RAW: inuse 0
+FRAG: inuse 0 memory 0
+</code></pre>
+<h3>4.3 실습: 패킷 추적 (tcpdump)</h3>
+<h4>서버에서 패킷 캡처</h4>
+<pre><code class="language-bash"># 모든 패킷 캡처
+sudo tcpdump -i eth0 -n
+
+# TCP 패킷만 캡처
+sudo tcpdump -i eth0 -n tcp
+
+# 특정 포트 (80) 패킷 캡처
+sudo tcpdump -i eth0 -n port 80
+
+# 패킷을 파일로 저장
+sudo tcpdump -i eth0 -w /tmp/capture.pcap
+
+# 저장된 파일 분석
+tcpdump -r /tmp/capture.pcap -n
+</code></pre>
+<h3>4.4 실습: 커널 함수 추적 (ftrace)</h3>
+<p><pre><code class="language-bash"># ftrace 마운트 확인
+mount | grep tracefs
+
+# ftrace 활성화
+sudo bash -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
+
+# netif_receive_skb 함수 추적
+sudo bash -c 'echo netif_receive_skb > /sys/kernel/debug/tracing/set_ftrace_filter'
+sudo bash -c 'echo function > /sys/kernel/debug/tracing/current_tracer'
+
+# 추적 결과 확인
+sudo cat /sys/kernel/debug/tracing/trace
+
+# 추적 비활성화
+sudo bash -c 'echo 0 > /sys/kernel/debug/tracing/tracing_on'
+</code></pre></p>
+<h3>4.5 실습: 패킷 흐름 시각화</h3>
+<h4>클라이언트에서 요청 전송</h4>
+<pre><code class="language-bash">curl -v http://192.168.100.10/
+</code></pre>
+<h4>서버에서 동시에 패킷 캡처</h4>
+<pre><code class="language-bash"># tcpdump로 패킷 캐치
+sudo tcpdump -i eth0 -n -A 'tcp port 80' &
+TCPDUMP_PID=$!
+
+# 요청 처리 후 tcpdump 종료
+sleep 5
+sudo kill $TCPDUMP_PID
+</code></pre>
+<hr>
+<h2 id="5-netfilter-hook-실습">5. Netfilter Hook 실습</h2>
+<h3>5.1 이론</h3>
+<strong>Netfilter</strong>는 리눅스 커널의 패킷 필터링 및 NAT 프레임워크입니다.
+<strong>5가지 Hook 지점:</strong>
+<ol>
+<li><strong>PREROUTING</strong>: 라우팅 결정 전 (DNAT, conntrack 시작)</li>
+<li><strong>INPUT</strong>: 로컬 목적지 패킷 (로컬 수신 필터링)</li>
+<li><strong>FORWARD</strong>: 포워딩 패킷 (라우터 역할)</li>
+<li><strong>OUTPUT</strong>: 로컬 생성 패킷 (로컬 송신 필터링)</li>
+<li><strong>POSTROUTING</strong>: 라우팅 결정 후 (SNAT, 최종 처리)</li>
+</ol>
+<h3>5.2 실습: iptables 규칙 확인</h3>
+<p><pre><code class="language-bash"># 현재 iptables 규칙 확인
+sudo iptables -L -n -v
+
+# NAT 테이블 확인
+sudo iptables -t nat -L -n -v
+
+# mangle 테이블 확인
+sudo iptables -t mangle -L -n -v
+
+# raw 테이블 확인
+sudo iptables -t raw -L -n -v
+</code></pre></p>
+<h3>5.3 실습: PREROUTING Hook 확인</h3>
+<h4>PREROUTING에서 패킷 로깅</h4>
+<pre><code class="language-bash"># PREROUTING에 로깅 규칙 추가
+sudo iptables -t raw -A PREROUTING -p tcp --dport 80 -j TRACE
+sudo iptables -t raw -A PREROUTING -p tcp --dport 80 -j LOG --log-prefix "PREROUTING: "
+
+# 로그 확인
+sudo tail -f /var/log/kern.log | grep PREROUTING
+</code></pre>
+<h4>클라이언트에서 요청 전송</h4>
+<pre><code class="language-bash">curl http://192.168.100.10/
+</code></pre>
+<h4>서버에서 로그 확인</h4>
+<pre><code class="language-bash">sudo tail -f /var/log/kern.log
+</code></pre>
+<h3>5.4 실습: INPUT Hook 확인</h3>
+<h4>INPUT 체인에 규칙 추가</h4>
+<pre><code class="language-bash"># INPUT 체인에 로깅 규칙 추가
+sudo iptables -A INPUT -p tcp --dport 80 -j LOG --log-prefix "INPUT: "
+
+# INPUT 체인에 허용 규칙 (이미 있을 수 있음)
+sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+
+# 로그 확인
+sudo tail -f /var/log/kern.log | grep INPUT
+</code></pre>
+<h3>5.5 실습: OUTPUT Hook 확인</h3>
+<h4>OUTPUT 체인에 규칙 추가</h4>
+<pre><code class="language-bash"># OUTPUT 체인에 로깅 규칙 추가
+sudo iptables -A OUTPUT -p tcp --sport 80 -j LOG --log-prefix "OUTPUT: "
+
+# 로그 확인
+sudo tail -f /var/log/kern.log | grep OUTPUT
+</code></pre>
+<h3>5.6 실습: POSTROUTING Hook 확인</h3>
+<h4>POSTROUTING에 규칙 추가</h4>
+<pre><code class="language-bash"># POSTROUTING에 로깅 규칙 추가
+sudo iptables -t mangle -A POSTROUTING -p tcp --sport 80 -j LOG --log-prefix "POSTROUTING: "
+
+# 로그 확인
+sudo tail -f /var/log/kern.log | grep POSTROUTING
+</code></pre>
+<h3>5.7 실습: conntrack (연결 추적) 확인</h3>
+<p><pre><code class="language-bash"># conntrack 모듈 로드 확인
+lsmod | grep nf_conntrack
+
+# 연결 추적 테이블 확인
+sudo conntrack -L
+
+# 특정 연결 확인
+sudo conntrack -L -p tcp --dport 80
+
+# 연결 추적 통계
+cat /proc/net/nf_conntrack | head -20
+
+# 실시간 연결 추적
+watch -n 1 'sudo conntrack -L | wc -l'
+</code></pre></p>
+<h3>5.8 실습: NAT 동작 확인</h3>
+<h4>SNAT (Source NAT) 설정</h4>
+<pre><code class="language-bash"># POSTROUTING에 SNAT 규칙 추가 (예시)
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+# NAT 테이블 확인
+sudo iptables -t nat -L -n -v
+</code></pre>
+<h4>DNAT (Destination NAT) 설정</h4>
+<pre><code class="language-bash"># PREROUTING에 DNAT 규칙 추가 (예시: 포트 포워딩)
+sudo iptables -t nat -A PREROUTING -p tcp --dport 8080 -j DNAT --to-destination 192.168.100.10:80
+
+# NAT 테이블 확인
+sudo iptables -t nat -L -n -v
+</code></pre>
+<h3>5.9 실습: 전체 Hook 순서 확인</h3>
+<h4>모든 Hook에 로깅 규칙 추가</h4>
+<pre><code class="language-bash"># PREROUTING
+sudo iptables -t raw -A PREROUTING -p tcp --dport 80 -j LOG --log-prefix "[PREROUTING] "
+
+# INPUT
+sudo iptables -A INPUT -p tcp --dport 80 -j LOG --log-prefix "[INPUT] "
+
+# OUTPUT
+sudo iptables -A OUTPUT -p tcp --sport 80 -j LOG --log-prefix "[OUTPUT] "
+
+# POSTROUTING
+sudo iptables -t mangle -A POSTROUTING -p tcp --sport 80 -j LOG --log-prefix "[POSTROUTING] "
+</code></pre>
+<h4>클라이언트에서 요청</h4>
+<pre><code class="language-bash">curl http://192.168.100.10/
+</code></pre>
+<h4>서버에서 로그 확인 (Hook 순서 확인)</h4>
+<pre><code class="language-bash">sudo tail -f /var/log/kern.log
+</code></pre>
+<strong>예상 결과:</strong> PREROUTING → INPUT → OUTPUT → POSTROUTING 순서로 로그가 나타남
+<hr>
+<h2 id="6-routing-레벨-실습">6. Routing 레벨 실습</h2>
+<h3>6.1 이론</h3>
+<strong>Routing</strong>은 패킷의 목적지가 로컬 시스템인지, 다른 호스트로 포워딩해야 하는지 결정하는 단계입니다.
+<ul>
+<li><strong>FIB (Forwarding Information Base)</strong>: 라우팅 테이블</li>
+<li><strong>로컬 수신 (INPUT)</strong>: 목적지가 로컬인 경우</li>
+<li><strong>포워딩 (FORWARD)</strong>: 다른 호스트로 전달해야 하는 경우</li>
+</ul>
+<h3>6.2 실습: 라우팅 테이블 확인</h3>
+<p><pre><code class="language-bash"># 라우팅 테이블 확인
+ip route show
+
+# 더 자세한 정보
+ip route show table all
+
+# 특정 목적지에 대한 라우팅 결정 확인
+ip route get 192.168.100.20
+
+# 라우팅 캐시 확인
+ip route show cache
+</code></pre></p>
+<h3>6.3 실습: 로컬 수신 경로 확인</h3>
+<h4>서버에서 로컬 IP로의 라우팅 확인</h4>
+<pre><code class="language-bash"># 서버의 IP 주소 확인
+ip addr show eth0
+
+# 로컬 IP로의 라우팅 결정
+ip route get 192.168.100.10
+
+# 로컬 수신 경로 확인
+ip route show local
+</code></pre>
+<h3>6.4 실습: 포워딩 활성화/비활성화</h3>
+<p><pre><code class="language-bash"># 현재 포워딩 상태 확인
+sysctl net.ipv4.ip_forward
+
+# 포워딩 활성화
+sudo sysctl -w net.ipv4.ip_forward=1
+
+# 영구 적용
+echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.conf
+
+# 포워딩 통계 확인
+cat /proc/net/snmp | grep -i forward
+</code></pre></p>
+<h3>6.5 실습: 정적 라우팅 추가</h3>
+<p><pre><code class="language-bash"># 정적 라우트 추가 (예시)
+sudo ip route add 192.168.200.0/24 via 192.168.100.1
+
+# 라우팅 테이블 확인
+ip route show
+
+# 라우트 삭제
+sudo ip route del 192.168.200.0/24
+</code></pre></p>
+<h3>6.6 실습: 라우팅 결정 추적</h3>
+<p><pre><code class="language-bash"># 라우팅 관련 커널 함수 추적
+sudo bash -c 'echo ip_route_input_noref > /sys/kernel/debug/tracing/set_ftrace_filter'
+sudo bash -c 'echo function > /sys/kernel/debug/tracing/current_tracer'
+sudo bash -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
+
+# 클라이언트에서 요청
+# (다른 터미널에서)
+curl http://192.168.100.10/
+
+# 추적 결과 확인
+sudo cat /sys/kernel/debug/tracing/trace | grep ip_route
+
+# 추적 비활성화
+sudo bash -c 'echo 0 > /sys/kernel/debug/tracing/tracing_on'
+</code></pre></p>
+<hr>
+<h2 id="7-socket-레벨-실습">7. Socket 레벨 실습</h2>
+<h3>7.1 이론</h3>
+<strong>Socket</strong>은 커널과 사용자 공간 애플리케이션 사이의 인터페이스입니다.
+<ul>
+<li><strong>Socket 큐</strong>: 수신 큐 (<code>sk_receive_queue</code>), 송신 큐 (<code>sk_write_queue</code>)</li>
+<li><strong>시스템 콜</strong>: <code>recv()</code>, <code>send()</code>, <code>read()</code>, <code>write()</code></li>
+<li><strong>주요 함수</strong>: <code>tcp_v4_rcv()</code>, <code>sock_queue_rcv_skb()</code>, <code>sk_data_ready()</code></li>
+</ul>
+<h3>7.2 실습: Socket 상태 확인</h3>
+<p><pre><code class="language-bash"># 모든 소켓 상태 확인
+ss -tuln
+
+# TCP 소켓만 확인
+ss -tn
+
+# LISTEN 상태 소켓 확인
+ss -tln
+
+# ESTABLISHED 연결 확인
+ss -tn state established
+
+# 소켓 통계
+ss -s
+</code></pre></p>
+<h3>7.3 실습: nginx 소켓 확인</h3>
+<h4>서버에서 nginx 소켓 확인</h4>
+<pre><code class="language-bash"># nginx 프로세스 확인
+ps aux | grep nginx
+
+# nginx가 사용하는 소켓 확인
+sudo ss -tnp | grep nginx
+
+# nginx의 LISTEN 소켓 확인
+sudo ss -tlnp | grep :80
+</code></pre>
+<strong>예상 결과:</strong>
+<pre><code class="language-bash">LISTEN  0  128  0.0.0.0:80  0.0.0.0:*  users:(("nginx",pid=1234,fd=6))
+</code></pre>
+<h3>7.4 실습: Socket 큐 모니터링</h3>
+<p><pre><code class="language-bash"># TCP 소켓의 수신/송신 큐 확인
+ss -i
+
+# 더 자세한 정보
+ss -i -e
+
+# 특정 연결의 큐 확인
+ss -i -n 'dst 192.168.100.10:80'
+</code></pre></p>
+<h3>7.5 실습: Socket 버퍼 크기 확인</h3>
+<p><pre><code class="language-bash"># 소켓 버퍼 크기 확인
+cat /proc/sys/net/core/rmem_default
+cat /proc/sys/net/core/wmem_default
+cat /proc/sys/net/core/rmem_max
+cat /proc/sys/net/core/wmem_max
+
+# TCP 소켓 버퍼 크기 확인
+cat /proc/sys/net/ipv4/tcp_rmem
+cat /proc/sys/net/ipv4/tcp_wmem
+</code></pre></p>
+<h3>7.6 실습: 실시간 Socket 모니터링</h3>
+<h4>클라이언트에서 요청 전송</h4>
+<pre><code class="language-bash"># 지속적인 요청
+while true; do
+    curl -s http://192.168.100.10/ > /dev/null
+    sleep 1
+done
+</code></pre>
+<h4>서버에서 Socket 모니터링</h4>
+<pre><code class="language-bash"># 실시간 소켓 상태 확인
+watch -n 1 'ss -tn state established | grep :80'
+
+# 소켓 통계 모니터링
+watch -n 1 'ss -s'
+</code></pre>
+<hr>
+<h2 id="8-tcp-레벨-실습">8. TCP 레벨 실습</h2>
+<h3>8.1 이론</h3>
+<strong>TCP (Transmission Control Protocol)</strong>는 신뢰성 있는 연결 지향 프로토콜입니다.
+<ul>
+<li><strong>3-way handshake</strong>: 연결 설정</li>
+<li><strong>흐름 제어</strong>: 윈도우 크기 조절</li>
+<li><strong>혼잡 제어</strong>: 네트워크 혼잡에 따른 전송 속도 조절</li>
+<li><strong>주요 함수</strong>: <code>tcp_v4_rcv()</code>, <code>tcp_sendmsg()</code>, <code>tcp_v4_do_rcv()</code></li>
+</ul>
+<h3>8.2 실습: TCP 연결 추적</h3>
+<h4>클라이언트에서 연결</h4>
+<pre><code class="language-bash"># TCP 연결 생성
+curl -v http://192.168.100.10/
+
+# 또는 telnet 사용
+telnet 192.168.100.10 80
+</code></pre>
+<h4>서버에서 연결 확인</h4>
+<pre><code class="language-bash"># ESTABLISHED 연결 확인
+ss -tn state established
+
+# 연결 상세 정보
+ss -i -n 'dst 192.168.100.10:80'
+</code></pre>
+<h3>8.3 실습: TCP 3-way Handshake 확인</h3>
+<h4>서버에서 패킷 캡처</h4>
+<pre><code class="language-bash"># SYN, SYN-ACK, ACK 패킷 캡처
+sudo tcpdump -i eth0 -n 'tcp port 80 and (tcp[tcpflags] & tcp-syn != 0 or tcp[tcpflags] & tcp-ack != 0)'
+</code></pre>
+<h4>클라이언트에서 연결 시도</h4>
+<pre><code class="language-bash">curl http://192.168.100.10/
+</code></pre>
+<h3>8.4 실습: TCP 윈도우 크기 확인</h3>
+<p><pre><code class="language-bash"># TCP 윈도우 크기 확인
+ss -i -n 'dst 192.168.100.10:80' | grep -i cwnd
+
+# TCP 버퍼 크기 확인
+cat /proc/sys/net/ipv4/tcp_rmem
+cat /proc/sys/net/ipv4/tcp_wmem
+</code></pre></p>
+<h3>8.5 실습: TCP 혼잡 제어 알고리즘 확인</h3>
+<p><pre><code class="language-bash"># 현재 사용 중인 혼잡 제어 알고리즘 확인
+sysctl net.ipv4.tcp_congestion_control
+
+# 사용 가능한 알고리즘 목록
+cat /proc/sys/net/ipv4/tcp_available_congestion_control
+
+# 혼잡 제어 알고리즘 변경 (예: BBR)
+sudo sysctl -w net.ipv4.tcp_congestion_control=bbr
+
+# 변경 확인
+sysctl net.ipv4.tcp_congestion_control
+</code></pre></p>
+<h3>8.6 실습: TCP 재전송 확인</h3>
+<p><pre><code class="language-bash"># TCP 재전송 통계 확인
+ss -i -n 'dst 192.168.100.10:80' | grep -i retrans
+
+# 또는 netstat 사용
+netstat -s | grep -i retrans
+</code></pre></p>
+<h3>8.7 실습: TCP 커널 함수 추적</h3>
+<p><pre><code class="language-bash"># tcp_v4_rcv 함수 추적
+sudo bash -c 'echo tcp_v4_rcv > /sys/kernel/debug/tracing/set_ftrace_filter'
+sudo bash -c 'echo function > /sys/kernel/debug/tracing/current_tracer'
+sudo bash -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
+
+# 클라이언트에서 요청
+# (다른 터미널에서)
+curl http://192.168.100.10/
+
+# 추적 결과 확인
+sudo cat /sys/kernel/debug/tracing/trace | grep tcp_v4_rcv
+
+# 추적 비활성화
+sudo bash -c 'echo 0 > /sys/kernel/debug/tracing/tracing_on'
+</code></pre></p>
+<hr>
+<h2 id="9-qdisctc-레벨-실습">9. qdisc/TC 레벨 실습</h2>
+<h3>9.1 이론</h3>
+<strong>qdisc (Queueing Discipline)</strong>와 <strong>TC (Traffic Control)</strong>는 패킷 전송을 제어하는 메커니즘입니다.
+<ul>
+<li><strong>트래픽 Shaping</strong>: 대역폭 제한</li>
+<li><strong>트래픽 Policing</strong>: 트래픽 제한</li>
+<li><strong>스케줄링</strong>: 패킷 전송 순서 제어</li>
+<li><strong>주요 함수</strong>: <code>dev_queue_xmit()</code>, <code>qdisc_run()</code>, <code>tc_classify()</code></li>
+</ul>
+<h3>9.2 실습: qdisc 확인</h3>
+<p><pre><code class="language-bash"># 인터페이스의 qdisc 확인
+tc qdisc show dev eth0
+
+# 더 자세한 정보
+tc -s qdisc show dev eth0
+
+# 기본 qdisc 확인
+sysctl net.core.default_qdisc
+</code></pre></p>
+<h3>9.3 실습: qdisc 통계 확인</h3>
+<p><pre><code class="language-bash"># qdisc 통계 확인
+tc -s qdisc show dev eth0
+
+# 클래스별 통계 (있는 경우)
+tc -s class show dev eth0
+</code></pre></p>
+<h3>9.4 실습: 트래픽 Shaping 설정</h3>
+<h4>대역폭 제한 설정 (예: 1Mbps)</h4>
+<pre><code class="language-bash"># 기존 qdisc 제거
+sudo tc qdisc del dev eth0 root
+
+# HTB (Hierarchical Token Bucket) qdisc 추가
+sudo tc qdisc add dev eth0 root handle 1: htb default 30
+
+# 클래스 추가 (1Mbps 제한)
+sudo tc class add dev eth0 parent 1: classid 1:1 htb rate 1mbit
+
+# 서브클래스 추가
+sudo tc class add dev eth0 parent 1:1 classid 1:10 htb rate 1mbit ceil 1mbit
+
+# 필터 추가
+sudo tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip dst 192.168.100.20/32 flowid 1:10
+
+# 설정 확인
+tc -s qdisc show dev eth0
+tc -s class show dev eth0
+</code></pre>
+<h4>클라이언트에서 대역폭 테스트</h4>
+<pre><code class="language-bash"># 대역폭 테스트
+curl -o /dev/null http://192.168.100.10/large-file
+</code></pre>
+<h3>9.5 실습: qdisc 큐 모니터링</h3>
+<p><pre><code class="language-bash"># qdisc 큐 길이 확인
+tc -s qdisc show dev eth0 | grep backlog
+
+# 실시간 모니터링
+watch -n 1 'tc -s qdisc show dev eth0'
+</code></pre></p>
+<h3>9.6 실습: qdisc 제거</h3>
+<p><pre><code class="language-bash"># 모든 qdisc 제거
+sudo tc qdisc del dev eth0 root
+
+# 확인
+tc qdisc show dev eth0
+</code></pre></p>
+<hr>
+<h2 id="10-패킷-드롭-및-rst-확인-실습">10. 패킷 드롭 및 RST 확인 실습</h2>
+<h3>10.1 이론</h3>
+<p>리눅스 네트워크 스택의 여러 계층에서 패킷이 드롭되거나 RST 패킷이 전송될 수 있습니다.</p>
+<strong>패킷 드롭 발생 지점:</strong>
+<ul>
+<li><strong>NIC RX Ring 버퍼 오버플로우</strong>: 링 버퍼가 가득 찬 경우</li>
+<li><strong>NAPI 백로그 초과</strong>: netdev_max_backlog 초과</li>
+<li><strong>XDP DROP</strong>: XDP 프로그램에서 DROP 액션</li>
+<li><strong>Netfilter DROP/REJECT</strong>: iptables 규칙에 의한 차단</li>
+<li><strong>라우팅 실패</strong>: 라우팅 테이블에 경로 없음, TTL 만료</li>
+<li><strong>TCP 에러</strong>: 체크섬 에러, 시퀀스 번호 범위 밖</li>
+<li><strong>qdisc 큐 오버플로우</strong>: 트래픽 제어 큐 포화</li>
+</ul>
+<strong>RST 패킷 발생 지점:</strong>
+<ul>
+<li><strong>TCP RST (RX 경로)</strong>: 존재하지 않는 포트, CLOSED 소켓</li>
+<li><strong>TCP RST (TX 경로)</strong>: 애플리케이션 강제 종료</li>
+<li><strong>Netfilter REJECT</strong>: iptables REJECT 규칙</li>
+</ul>
+<h3>10.2 실습: NIC RX Ring 버퍼 오버플로우 확인</h3>
+<h4>10.2.1 드롭 통계 확인</h4>
+<p><pre><code class="language-bash"># NIC 드롭 통계 확인
+cat /proc/net/dev | grep -E "drop|errs"
+
+# 더 자세한 통계 (ethtool)
+sudo ethtool -S eth0 | grep -i drop
+
+# 실시간 드롭 모니터링
+watch -n 1 'cat /proc/net/dev | grep eth0'
+</code></pre></p>
+<h4>10.2.2 RX Ring 버퍼 크기 축소 (드롭 유발)</h4>
+<p><pre><code class="language-bash"># 현재 RX Ring 버퍼 크기 확인
+sudo ethtool -g eth0
+
+# RX Ring 버퍼 크기를 작게 설정 (드롭 유발)
+sudo ethtool -G eth0 rx 64
+
+# 확인
+sudo ethtool -g eth0
+</code></pre></p>
+<h4>10.2.3 고속 트래픽 생성 및 드롭 확인</h4>
+<strong>클라이언트에서 실행:</strong>
+<pre><code class="language-bash"># 서버로 대량의 패킷 전송
+for i in {1..10000}; do
+    curl -s http://192.168.100.10/ > /dev/null 2>&1 &
+done
+wait
+</code></pre>
+<strong>서버에서 드롭 확인:</strong>
+<pre><code class="language-bash"># 드롭 카운터 증가 확인
+watch -n 1 'cat /proc/net/dev | grep eth0 | awk "{print \$4, \$5}"'
+</code></pre>
+<h4>10.2.4 원래 설정 복원</h4>
+<p><pre><code class="language-bash"># RX Ring 버퍼 크기 복원 (기본값 또는 적절한 값)
+sudo ethtool -G eth0 rx 4096
+
+# 확인
+sudo ethtool -g eth0
+</code></pre></p>
+<h3>10.3 실습: NAPI 백로그 초과 확인</h3>
+<h4>10.3.1 netdev_max_backlog 값 확인 및 축소</h4>
+<p><pre><code class="language-bash"># 현재 값 확인
+sysctl net.core.netdev_max_backlog
+
+# 값을 매우 작게 설정 (드롭 유발)
+sudo sysctl -w net.core.netdev_max_backlog=10
+
+# 확인
+sysctl net.core.netdev_max_backlog
+</code></pre></p>
+<h4>10.3.2 NAPI 백로그 통계 확인</h4>
+<p><pre><code class="language-bash"># NAPI 백로그 통계 확인
+cat /proc/net/softnet_stat
+
+# 각 필드 의미:
+# - 첫 번째: 처리된 패킷 수
+# - 두 번째: 드롭된 패킷 수
+# - 세 번째: 시간 초과
+# - 네 번째: CPU 마이그레이션
+
+# 실시간 모니터링
+watch -n 1 'cat /proc/net/softnet_stat'
+</code></pre></p>
+<h4>10.3.3 고속 트래픽 생성 및 백로그 초과 확인</h4>
+<strong>클라이언트에서 실행:</strong>
+<pre><code class="language-bash"># 동시에 많은 연결 생성
+ab -n 10000 -c 500 http://192.168.100.10/
+</code></pre>
+<strong>서버에서 확인:</strong>
+<pre><code class="language-bash"># 커널 메시지에서 백로그 초과 확인
+sudo dmesg | grep -i "backlog"
+
+# 또는 실시간 확인
+sudo tail -f /var/log/kern.log | grep -i backlog
+
+# softnet_stat에서 드롭 확인
+watch -n 1 'cat /proc/net/softnet_stat | awk "{print \$2}"'
+</code></pre>
+<h4>10.3.4 원래 설정 복원</h4>
+<p><pre><code class="language-bash"># netdev_max_backlog 복원
+sudo sysctl -w net.core.netdev_max_backlog=1000
+
+# 확인
+sysctl net.core.netdev_max_backlog
+</code></pre></p>
+<h3>10.4 실습: Netfilter DROP 확인</h3>
+<h4>10.4.1 DROP 규칙 추가</h4>
+<p><pre><code class="language-bash"># INPUT 체인에 DROP 규칙 추가 (특정 IP 차단)
+sudo iptables -A INPUT -s 192.168.100.20 -j DROP
+
+# 규칙 확인
+sudo iptables -L -n -v | grep DROP
+</code></pre></p>
+<h4>10.4.2 DROP 통계 확인</h4>
+<p><pre><code class="language-bash"># iptables 통계 확인 (DROP된 패킷 수)
+sudo iptables -L -n -v | grep DROP
+
+# 실시간 통계 모니터링
+watch -n 1 'sudo iptables -L -n -v | grep DROP'
+</code></pre></p>
+<h4>10.4.3 클라이언트에서 연결 시도</h4>
+<p><pre><code class="language-bash"># 서버로 연결 시도 (차단됨)
+curl -v http://192.168.100.10/
+ping -c 3 192.168.100.10
+
+# 타임아웃 발생 확인
+</code></pre></p>
+<h4>10.4.4 패킷 캡처로 DROP 확인</h4>
+<strong>서버에서 실행:</strong>
+<pre><code class="language-bash"># 패킷 캡처 (DROP된 패킷은 보이지 않지만, 도착하는 패킷은 확인 가능)
+sudo tcpdump -i eth0 -n 'host 192.168.100.20'
+</code></pre>
+<h4>10.4.5 DROP 규칙 제거</h4>
+<p><pre><code class="language-bash"># DROP 규칙 제거
+sudo iptables -D INPUT -s 192.168.100.20 -j DROP
+
+# 확인
+sudo iptables -L -n -v
+</code></pre></p>
+<h3>10.5 실습: Netfilter REJECT (RST) 확인</h3>
+<h4>10.5.1 REJECT 규칙 추가</h4>
+<p><pre><code class="language-bash"># INPUT 체인에 REJECT 규칙 추가 (TCP RST 전송)
+sudo iptables -A INPUT -p tcp --dport 80 -j REJECT --reject-with tcp-reset
+
+# 또는 ICMP port unreachable (UDP의 경우)
+# sudo iptables -A INPUT -p udp --dport 53 -j REJECT --reject-with icmp-port-unreachable
+
+# 규칙 확인
+sudo iptables -L -n -v | grep REJECT
+</code></pre></p>
+<h4>10.5.2 클라이언트에서 연결 시도 및 RST 확인</h4>
+<strong>클라이언트에서 실행:</strong>
+<pre><code class="language-bash"># 연결 시도
+curl -v http://192.168.100.10/
+
+# 예상 결과: "Connection refused" 또는 즉시 실패
+</code></pre>
+<strong>서버에서 패킷 캡처:</strong>
+<pre><code class="language-bash"># RST 패킷 캡처
+sudo tcpdump -i eth0 -n 'tcp port 80 and tcp[tcpflags] & tcp-rst != 0'
+</code></pre>
+<strong>클라이언트에서 패킷 캡처:</strong>
+<pre><code class="language-bash"># RST 패킷 수신 확인
+sudo tcpdump -i eth0 -n 'tcp port 80 and tcp[tcpflags] & tcp-rst != 0'
+</code></pre>
+<h4>10.5.3 REJECT vs DROP 비교</h4>
+<p><pre><code class="language-bash"># REJECT 규칙 제거
+sudo iptables -D INPUT -p tcp --dport 80 -j REJECT --reject-with tcp-reset
+
+# DROP 규칙 추가
+sudo iptables -A INPUT -p tcp --dport 80 -j DROP
+
+# 클라이언트에서 연결 시도 (타임아웃 발생)
+curl -v --max-time 5 http://192.168.100.10/
+
+# REJECT로 변경
+sudo iptables -D INPUT -p tcp --dport 80 -j DROP
+sudo iptables -A INPUT -p tcp --dport 80 -j REJECT --reject-with tcp-reset
+
+# 클라이언트에서 연결 시도 (즉시 실패)
+curl -v http://192.168.100.10/
+</code></pre></p>
+<h4>10.5.4 REJECT 규칙 제거</h4>
+<p><pre><code class="language-bash"># REJECT 규칙 제거
+sudo iptables -D INPUT -p tcp --dport 80 -j REJECT --reject-with tcp-reset
+
+# 확인
+sudo iptables -L -n -v
+</code></pre></p>
+<h3>10.6 실습: 라우팅 실패 확인</h3>
+<h4>10.6.1 라우팅 테이블에서 경로 제거</h4>
+<p><pre><code class="language-bash"># 현재 라우팅 테이블 확인
+ip route show
+
+# 기본 게이트웨이 제거 (임시)
+sudo ip route del default
+
+# 라우팅 테이블 확인
+ip route show
+</code></pre></p>
+<h4>10.6.2 외부 네트워크로의 연결 시도</h4>
+<strong>클라이언트에서 실행:</strong>
+<pre><code class="language-bash"># 외부 네트워크로 연결 시도 (라우팅 실패)
+ping -c 3 8.8.8.8
+
+# 예상 결과: "Network is unreachable" 또는 "No route to host"
+</code></pre>
+<h4>10.6.3 라우팅 드롭 통계 확인</h4>
+<p><pre><code class="language-bash"># IP 통계 확인
+cat /proc/net/snmp | grep -i ip
+
+# 라우팅 실패 통계 확인
+ip -s link show eth0
+</code></pre></p>
+<h4>10.6.4 라우팅 복원</h4>
+<p><pre><code class="language-bash"># 기본 게이트웨이 복원 (실제 게이트웨이 IP로 변경)
+sudo ip route add default via 192.168.100.1
+
+# 확인
+ip route show
+</code></pre></p>
+<h3>10.7 실습: TCP 에러로 인한 드롭 확인</h3>
+<h4>10.7.1 TCP 통계 확인</h4>
+<p><pre><code class="language-bash"># TCP 통계 확인
+netstat -s | grep -i tcp
+
+# 또는 ss 사용
+ss -s
+
+# TCP 에러 통계
+cat /proc/net/sockstat
+</code></pre></p>
+<h4>10.7.2 잘못된 시퀀스 번호 패킷 생성 (고급)</h4>
+<strong>주의</strong>: 이 실습은 고급 사용자를 위한 것입니다. 실제 환경에서는 사용하지 마세요.
+<p><pre><code class="language-bash"># scapy를 사용한 패킷 조작 (설치 필요)
+sudo apt install -y python3-scapy
+
+# Python 스크립트로 잘못된 시퀀스 번호를 가진 패킷 전송
+python3 << 'EOF'
+from scapy.all import *
+# 잘못된 시퀀스 번호로 패킷 전송
+packet = IP(dst="192.168.100.10")/TCP(dport=80, flags="A", seq=999999999)
+send(packet, verbose=1)
+EOF
+</code></pre></p>
+<h4>10.7.3 TCP 체크섬 에러 확인</h4>
+<p><pre><code class="language-bash"># TCP 체크섬 에러 통계
+netstat -s | grep -i "checksum"
+
+# 인터페이스 에러 통계
+cat /proc/net/dev | grep -E "errs|drop"
+</code></pre></p>
+<h3>10.8 실습: 존재하지 않는 포트로의 연결 (RST 확인)</h3>
+<h4>10.8.1 nginx 중지</h4>
+<p><pre><code class="language-bash"># nginx 중지
+sudo systemctl stop nginx
+
+# 포트 80이 닫혀있는지 확인
+sudo ss -tln | grep :80
+</code></pre></p>
+<h4>10.8.2 클라이언트에서 연결 시도</h4>
+<p><pre><code class="language-bash"># 존재하지 않는 포트로 연결 시도
+curl -v http://192.168.100.10/
+
+# 또는 telnet 사용
+telnet 192.168.100.10 80
+
+# 예상 결과: "Connection refused"
+</code></pre></p>
+<h4>10.8.3 RST 패킷 캡처</h4>
+<strong>서버에서 실행:</strong>
+<pre><code class="language-bash"># RST 패킷 캡처
+sudo tcpdump -i eth0 -n 'tcp port 80 and tcp[tcpflags] & tcp-rst != 0' -v
+</code></pre>
+<strong>클라이언트에서 실행:</strong>
+<pre><code class="language-bash"># RST 패킷 수신 확인
+sudo tcpdump -i eth0 -n 'tcp port 80 and tcp[tcpflags] & tcp-rst != 0' -v
+
+# 연결 시도
+curl http://192.168.100.10/
+</code></pre>
+<h4>10.8.4 nginx 재시작</h4>
+<p><pre><code class="language-bash"># nginx 재시작
+sudo systemctl start nginx
+
+# 확인
+sudo ss -tln | grep :80
+</code></pre></p>
+<h3>10.9 실습: qdisc 큐 오버플로우 확인</h3>
+<h4>10.9.1 qdisc 큐 크기 제한 설정</h4>
+<p><pre><code class="language-bash"># 기존 qdisc 제거
+sudo tc qdisc del dev eth0 root
+
+# 매우 작은 큐 크기로 qdisc 설정 (pfifo, 큐 크기 10)
+sudo tc qdisc add dev eth0 root handle 1: pfifo limit 10
+
+# 확인
+tc -s qdisc show dev eth0
+</code></pre></p>
+<h4>10.9.2 고속 트래픽 생성</h4>
+<strong>클라이언트에서 실행:</strong>
+<pre><code class="language-bash"># 대량의 패킷 전송
+for i in {1..1000}; do
+    curl -s http://192.168.100.10/ > /dev/null 2>&1 &
+done
+wait
+</code></pre>
+<h4>10.9.3 qdisc 드롭 확인</h4>
+<strong>서버에서 실행:</strong>
+<pre><code class="language-bash"># qdisc 드롭 통계 확인
+tc -s qdisc show dev eth0 | grep -i drop
+
+# 실시간 모니터링
+watch -n 1 'tc -s qdisc show dev eth0 | grep -E "dropped|overlimits"'
+</code></pre>
+<h4>10.9.4 qdisc 복원</h4>
+<p><pre><code class="language-bash"># qdisc 제거
+sudo tc qdisc del dev eth0 root
+
+# 기본 qdisc로 복원
+sudo tc qdisc add dev eth0 root handle 1: fq
+
+# 확인
+tc qdisc show dev eth0
+</code></pre></p>
+<h3>10.10 실습: 종합 드롭 모니터링 스크립트</h3>
+<h4>10.10.1 드롭 모니터링 스크립트 생성</h4>
+<p><pre><code class="language-bash">cat > /tmp/monitor_drops.sh << 'EOF'
+#!/bin/bash
+
+echo "=== 패킷 드롭 및 RST 모니터링 ==="
+echo "시간: $(date)"
+echo ""
+
+# 1. NIC 드롭
+echo "--- NIC 드롭 통계 ---"
+cat /proc/net/dev | grep eth0 | awk '{print "RX drops:", $4, "TX drops:", $12}'
+echo ""
+
+# 2. NAPI 백로그 드롭
+echo "--- NAPI 백로그 드롭 ---"
+cat /proc/net/softnet_stat | awk '{sum+=$2} END {print "Total drops:", sum}'
+echo ""
+
+# 3. iptables DROP/REJECT
+echo "--- Netfilter DROP/REJECT ---"
+sudo iptables -L -n -v | grep -E "DROP|REJECT" | awk '{print $2, $8, $9}'
+echo ""
+
+# 4. TCP 에러
+echo "--- TCP 에러 통계 ---"
+netstat -s | grep -E "segments retransmitted|bad segments|checksum errors" | head -5
+echo ""
+
+# 5. qdisc 드롭
+echo "--- qdisc 드롭 ---"
+tc -s qdisc show dev eth0 2>/dev/null | grep -E "dropped|overlimits" || echo "No qdisc drops"
+echo ""
+
+# 6. 소켓 통계
+echo "--- 소켓 통계 ---"
+ss -s | grep -E "TCP|UDP"
+echo ""
+
+echo "=== 모니터링 완료 ==="
+EOF
+
+chmod +x /tmp/monitor_drops.sh
+</code></pre></p>
+<h4>10.10.2 실시간 모니터링</h4>
+<p><pre><code class="language-bash"># 실시간 모니터링 (5초마다)
+watch -n 5 /tmp/monitor_drops.sh
+</code></pre></p>
+<h3>10.11 실습: 패킷 드롭 원인 분석</h3>
+<h4>10.11.1 드롭 발생 시나리오별 확인 방법</h4>
+<strong>NIC RX Ring 오버플로우:</strong>
+<pre><code class="language-bash"># 확인 방법
+ethtool -S eth0 | grep rx_dropped
+cat /proc/net/dev | grep eth0 | awk '{print "RX drops:", $4}'
+</code></pre>
+<strong>NAPI 백로그 초과:</strong>
+<pre><code class="language-bash"># 확인 방법
+cat /proc/net/softnet_stat | awk '{print "Drops:", $2}'
+dmesg | grep -i "backlog"
+</code></pre>
+<strong>Netfilter DROP:</strong>
+<pre><code class="language-bash"># 확인 방법
+sudo iptables -L -n -v | grep DROP
+sudo iptables -t mangle -L -n -v | grep DROP
+</code></pre>
+<strong>라우팅 실패:</strong>
+<pre><code class="language-bash"># 확인 방법
+ip route get <destination>
+cat /proc/net/snmp | grep -i ip
+</code></pre>
+<strong>TCP 에러:</strong>
+<pre><code class="language-bash"># 확인 방법
+netstat -s | grep -i tcp
+ss -s
+</code></pre>
+<h4>10.11.2 드롭 로그 분석</h4>
+<p><pre><code class="language-bash"># 커널 메시지에서 드롭 관련 로그 확인
+sudo dmesg | grep -iE "drop|error|fail"
+
+# 시스템 로그 확인
+sudo journalctl -k | grep -iE "drop|error|fail" | tail -20
+</code></pre></p>
+<hr>
+<h2 id="11-전체-흐름-추적">11. 전체 흐름 추적</h2>
+<h3>10.1 이론</h3>
+<p>전체 네트워크 스택을 통과하는 패킷의 흐름을 추적하여 각 계층에서의 동작을 확인합니다.</p>
+<h3>10.2 실습: 종합 추적 스크립트</h3>
+<h4>서버에서 실행할 추적 스크립트 생성</h4>
+<p><pre><code class="language-bash">cat > /tmp/trace_network.sh << 'EOF'
+#!/bin/bash
+
+echo "=== 네트워크 스택 종합 추적 시작 ==="
+echo "시간: $(date)"
+echo ""
+
+# 1. NIC 통계
+echo "--- NIC 통계 ---"
+cat /proc/net/dev | grep eth0
+echo ""
+
+# 2. 인터럽트 통계
+echo "--- 인터럽트 통계 ---"
+grep eth0 /proc/interrupts
+echo ""
+
+# 3. 소켓 상태
+echo "--- 소켓 상태 ---"
+ss -tn state established | grep :80 | head -5
+echo ""
+
+# 4. Netfilter 규칙
+echo "--- Netfilter 규칙 (간략) ---"
+sudo iptables -L -n -v | head -10
+echo ""
+
+# 5. 라우팅 테이블
+echo "--- 라우팅 테이블 ---"
+ip route show | head -5
+echo ""
+
+# 6. qdisc 상태
+echo "--- qdisc 상태 ---"
+tc qdisc show dev eth0
+echo ""
+
+echo "=== 추적 완료 ==="
+EOF
+
+chmod +x /tmp/trace_network.sh
+</code></pre></p>
+<h4>실시간 모니터링</h4>
+<pre><code class="language-bash"># 실시간 모니터링 (5초마다)
+watch -n 5 /tmp/trace_network.sh
+</code></pre>
+<h3>10.3 실습: 패킷 흐름 전체 추적</h3>
+<h4>서버에서 패킷 캡처 시작</h4>
+<pre><code class="language-bash"># 패킷을 파일로 저장
+sudo tcpdump -i eth0 -w /tmp/full_trace.pcap -n 'tcp port 80' &
+TCPDUMP_PID=$!
+</code></pre>
+<h4>클라이언트에서 요청</h4>
+<pre><code class="language-bash"># HTTP 요청 전송
+curl -v http://192.168.100.10/
+</code></pre>
+<h4>서버에서 캡처 종료 및 분석</h4>
+<pre><code class="language-bash"># tcpdump 종료
+sudo kill $TCPDUMP_PID
+
+# 패킷 분석
+tcpdump -r /tmp/full_trace.pcap -n -A
+</code></pre>
+<h3>10.4 실습: 커널 함수 전체 추적</h3>
+<p><pre><code class="language-bash"># 여러 함수 동시 추적
+sudo bash -c 'echo "netif_receive_skb
+ip_rcv
+tcp_v4_rcv
+sock_queue_rcv_skb" > /sys/kernel/debug/tracing/set_ftrace_filter'
+
+sudo bash -c 'echo function_graph > /sys/kernel/debug/tracing/current_tracer'
+sudo bash -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
+
+# 클라이언트에서 요청
+# (다른 터미널에서)
+curl http://192.168.100.10/
+
+# 추적 결과 확인
+sudo cat /sys/kernel/debug/tracing/trace | head -100
+
+# 추적 비활성화
+sudo bash -c 'echo 0 > /sys/kernel/debug/tracing/tracing_on'
+</code></pre></p>
+<h3>10.5 실습: 성능 분석 (perf)</h3>
+<p><pre><code class="language-bash"># perf로 네트워크 관련 함수 프로파일링
+sudo perf record -e 'net:*' -a sleep 10
+
+# 결과 확인
+sudo perf report
+
+# 특정 함수 프로파일링
+sudo perf record -g -e 'net:*' -a sleep 10
+sudo perf report -g 'graph,0.5,caller'
+</code></pre></p>
+<hr>
+<h2 id="부록-유용한-명령어-모음">부록: 유용한 명령어 모음</h2>
+<h3>네트워크 인터페이스</h3>
+<pre><code class="language-bash">ip link show                    # 인터페이스 목록
+ip addr show                    # IP 주소 확인
+ethtool eth0                    # NIC 정보
+ethtool -S eth0                # NIC 통계
+</code></pre>
+<h3>패킷 추적</h3>
+<pre><code class="language-bash">tcpdump -i eth0 -n             # 패킷 캡처
+tcpdump -i eth0 -w file.pcap   # 파일로 저장
+wireshark file.pcap            # GUI로 분석
+</code></pre>
+<h3>소켓 및 연결</h3>
+<pre><code class="language-bash">ss -tuln                       # 모든 소켓
+ss -tn state established       # ESTABLISHED 연결
+netstat -tuln                  # 소켓 (구버전)
+lsof -i :80                    # 포트 사용 프로세스
+</code></pre>
+<h3>라우팅</h3>
+<pre><code class="language-bash">ip route show                  # 라우팅 테이블
+ip route get <dest>            # 특정 목적지 라우팅
+route -n                       # 라우팅 테이블 (구버전)
+</code></pre>
+<h3>Netfilter</h3>
+<pre><code class="language-bash">iptables -L -n -v              # 규칙 확인
+iptables -t nat -L -n -v        # NAT 테이블
+conntrack -L                   # 연결 추적
+</code></pre>
+<h3>커널 추적</h3>
+<pre><code class="language-bash">dmesg                          # 커널 메시지
+cat /proc/net/sockstat         # 소켓 통계
+cat /proc/net/softnet_stat     # NAPI 통계
+</code></pre>
+<h3>성능 모니터링</h3>
+<pre><code class="language-bash">iftop                          # 대역폭 모니터링
+nethogs                        # 프로세스별 네트워크 사용량
+vnstat                         # 네트워크 통계
+</code></pre>
+<hr>
+<h2 id="문제-해결">문제 해결</h2>
+<h3>일반적인 문제</h3>
+<ol>
+<li><strong>권한 오류</strong>: 대부분의 네트워크 모니터링 도구는 root 권한이 필요합니다.</li>
+</ol>
+   <pre><code class="language-bash">   sudo <command>
+   </code></pre>
+<ol>
+<li><strong>인터페이스 이름이 다름</strong>: <code>eth0</code> 대신 <code>ens33</code>, <code>enp0s3</code> 등일 수 있습니다.</li>
+</ol>
+   <pre><code class="language-bash">   ip link show
+   </code></pre>
+<ol>
+<li><strong>ftrace가 작동하지 않음</strong>: 커널이 ftrace를 지원하는지 확인</li>
+</ol>
+   <pre><code class="language-bash">   ls /sys/kernel/debug/tracing
+   </code></pre>
+<ol>
+<li><strong>conntrack이 없음</strong>: 모듈 로드 필요</li>
+</ol>
+   <pre><code class="language-bash">   sudo modprobe nf_conntrack
+   </code></pre>
+<hr>
+<h2 id="참고-자료">참고 자료</h2>
+<ul>
+<li><a href="https://www.kernel.org/doc/html/latest/networking/">Linux Network Stack Documentation</a></li>
+<li><a href="../index.html">Cytoscape.js Network Flow Map</a></li>
+<li><a href="../PROTO.md">PROTO.md</a> - 네트워크 스택 이론 설명</li>
+<li><a href="https://www.netfilter.org/documentation/">iptables Tutorial</a></li>
+<li><a href="https://en.wikipedia.org/wiki/TCP/IP_Illustrated">TCP/IP Illustrated</a></li>
+</ul>
+<hr>
+<h2 id="라이선스">라이선스</h2>
+<p>이 튜토리얼은 교육 목적으로 자유롭게 사용할 수 있습니다.</p>
+
+  </div>
+</body>
+</html>
