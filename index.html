@@ -497,7 +497,7 @@ const networkData = {
       label: 'CONFIG_NET', 
       level: 'KERNEL_OPTION', 
       desc: '네트워크 지원',
-      detailedDesc: '리눅스 커널의 기본 네트워크 지원을 활성화합니다. 이 옵션이 비활성화되면 네트워크 기능이 완전히 제거됩니다. 모든 네트워크 관련 기능의 기본 전제 조건입니다.\n\n관련 sysctl: net.core.* (모든 네트워크 관련 sysctl의 기반)\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.core.rmem_default = 212992 (수신 버퍼 기본 크기)\n- net.core.wmem_default = 212992 (송신 버퍼 기본 크기)\n- net.core.rmem_max = 212992 (수신 버퍼 최대 크기)\n- net.core.wmem_max = 212992 (송신 버퍼 최대 크기)\n- net.core.netdev_max_backlog = 1000 (네트워크 장치 백로그 최대값)',
+      detailedDesc: '리눅스 커널의 기본 네트워크 지원을 활성화합니다. 이 옵션이 비활성화되면 네트워크 기능이 완전히 제거됩니다. 모든 네트워크 관련 기능의 기본 전제 조건입니다.\n\n관련 sysctl: net.core.* (모든 네트워크 관련 sysctl의 기반)\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.core.rmem_default = 212992 (수신 버퍼 기본 크기)\n- net.core.wmem_default = 212992 (송신 버퍼 기본 크기)\n- net.core.rmem_max = 212992 (수신 버퍼 최대 크기)\n- net.core.wmem_max = 212992 (송신 버퍼 최대 크기)\n- net.core.netdev_max_backlog = 1000 (네트워크 장치 백로그 최대값)\n\n값 변경 시 발생할 수 있는 사례:\n- net.core.netdev_max_backlog를 너무 작게 설정(예: 100): 고속 네트워크에서 패킷 드롭 발생, 네트워크 성능 저하\n- net.core.rmem_max를 너무 작게 설정: TCP 수신 버퍼가 부족하여 대역폭 활용도 감소, 특히 고속 네트워크에서 성능 저하\n- net.core.wmem_max를 너무 작게 설정: TCP 송신 버퍼가 부족하여 전송 속도 제한, 대용량 파일 전송 시 병목 발생',
       functions: [], 
       position: { x: 200, y: -50 } 
     },
@@ -506,7 +506,7 @@ const networkData = {
       label: 'CONFIG_INET', 
       level: 'KERNEL_OPTION', 
       desc: 'TCP/IP 지원',
-      detailedDesc: 'TCP/IP 프로토콜 스택을 활성화합니다. IPv4 네트워킹, TCP, UDP, ICMP 등의 프로토콜을 사용하려면 필수입니다. 이 옵션이 없으면 IP 기반 네트워킹이 불가능합니다.\n\n관련 sysctl: net.ipv4.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.ipv4.ip_forward = 0 (IP 포워딩 비활성화)\n- net.ipv4.tcp_rmem = 4096 131072 6291456 (TCP 수신 버퍼: min default max)\n- net.ipv4.tcp_wmem = 4096 16384 4194304 (TCP 송신 버퍼: min default max)\n- net.ipv4.tcp_congestion_control = cubic (TCP 혼잡 제어 알고리즘)\n- net.ipv4.tcp_syncookies = 1 (SYN flood 방어 활성화)\n- net.ipv4.conf.all.forwarding = 0 (모든 인터페이스 포워딩 비활성화)',
+      detailedDesc: 'TCP/IP 프로토콜 스택을 활성화합니다. IPv4 네트워킹, TCP, UDP, ICMP 등의 프로토콜을 사용하려면 필수입니다. 이 옵션이 없으면 IP 기반 네트워킹이 불가능합니다.\n\n관련 sysctl: net.ipv4.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.ipv4.ip_forward = 0 (IP 포워딩 비활성화)\n- net.ipv4.tcp_rmem = 4096 131072 6291456 (TCP 수신 버퍼: min default max)\n- net.ipv4.tcp_wmem = 4096 16384 4194304 (TCP 송신 버퍼: min default max)\n- net.ipv4.tcp_congestion_control = cubic (TCP 혼잡 제어 알고리즘)\n- net.ipv4.tcp_syncookies = 1 (SYN flood 방어 활성화)\n- net.ipv4.conf.all.forwarding = 0 (모든 인터페이스 포워딩 비활성화)\n\n값 변경 시 발생할 수 있는 사례:\n- net.ipv4.ip_forward = 1로 변경: 시스템이 라우터 역할을 하게 되어 다른 네트워크 간 패킷을 전달. 보안상 위험할 수 있으므로 방화벽 설정 필요\n- net.ipv4.tcp_rmem을 너무 작게 설정(예: 4096 8192 16384): 고속 네트워크에서 TCP 수신 버퍼 부족으로 인한 성능 저하, 대역폭 활용도 감소, 패킷 재전송 증가\n- net.ipv4.tcp_rmem의 max 값을 초과하는 트래픽: 버퍼 오버플로우로 인한 패킷 손실, TCP 흐름 제어로 인한 전송 속도 제한\n- net.ipv4.tcp_wmem을 너무 작게 설정: 대용량 파일 전송 시 병목 발생, 전송 속도 저하\n- net.ipv4.tcp_syncookies = 0으로 변경: SYN flood 공격에 취약해짐, 많은 SYN 패킷으로 인한 서비스 거부 가능',
       functions: [], 
       position: { x: 400, y: -50 } 
     },
@@ -515,7 +515,7 @@ const networkData = {
       label: 'CONFIG_IPV6', 
       level: 'KERNEL_OPTION', 
       desc: 'IPv6 지원',
-      detailedDesc: 'IPv6 프로토콜 스택을 활성화합니다. IPv6 주소, 라우팅, Neighbor Discovery 등을 지원합니다. IPv6 네트워킹을 사용하려면 필수입니다.\n\n관련 sysctl: net.ipv6.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.ipv6.conf.all.forwarding = 0 (IPv6 포워딩 비활성화)\n- net.ipv6.conf.all.disable_ipv6 = 0 (IPv6 활성화)\n- net.ipv6.conf.default.disable_ipv6 = 0 (기본 인터페이스 IPv6 활성화)\n- net.ipv6.ip_nonlocal_bind = 0 (비로컬 바인딩 비활성화)\n- net.ipv6.conf.all.accept_ra = 1 (Router Advertisement 수신 허용)',
+      detailedDesc: 'IPv6 프로토콜 스택을 활성화합니다. IPv6 주소, 라우팅, Neighbor Discovery 등을 지원합니다. IPv6 네트워킹을 사용하려면 필수입니다.\n\n관련 sysctl: net.ipv6.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.ipv6.conf.all.forwarding = 0 (IPv6 포워딩 비활성화)\n- net.ipv6.conf.all.disable_ipv6 = 0 (IPv6 활성화)\n- net.ipv6.conf.default.disable_ipv6 = 0 (기본 인터페이스 IPv6 활성화)\n- net.ipv6.ip_nonlocal_bind = 0 (비로컬 바인딩 비활성화)\n- net.ipv6.conf.all.accept_ra = 1 (Router Advertisement 수신 허용)\n\n값 변경 시 발생할 수 있는 사례:\n- net.ipv6.conf.all.forwarding = 1로 변경: IPv6 라우터로 동작, 다른 IPv6 네트워크 간 패킷 전달 가능. 보안 설정 필요\n- net.ipv6.conf.all.disable_ipv6 = 1로 변경: IPv6 기능 완전 비활성화, IPv6 주소 할당 불가, IPv6 서비스 접근 불가\n- net.ipv6.conf.all.accept_ra = 0으로 변경: Router Advertisement 수신 불가, 자동 IPv6 주소 구성 불가, 수동 설정 필요',
       functions: [], 
       position: { x: 600, y: -50 } 
     },
@@ -524,7 +524,7 @@ const networkData = {
       label: 'CONFIG_NETFILTER', 
       level: 'KERNEL_OPTION', 
       desc: 'Netfilter 프레임워크',
-      detailedDesc: 'Netfilter 프레임워크를 활성화합니다. iptables, nftables, 패킷 필터링, NAT 등의 기능을 사용하려면 필수입니다. 방화벽과 NAT 기능의 기반이 됩니다.\n\n관련 sysctl: net.netfilter.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.netfilter.nf_log_all_netns = 0 (모든 네임스페이스 로깅 비활성화)\n- net.netfilter.nf_conntrack_max = 262144 (연결 추적 최대값, CONNTRACK 활성화 시)\n- net.netfilter.nf_conntrack_tcp_timeout_established = 432000 (TCP ESTABLISHED 타임아웃, 초)',
+      detailedDesc: 'Netfilter 프레임워크를 활성화합니다. iptables, nftables, 패킷 필터링, NAT 등의 기능을 사용하려면 필수입니다. 방화벽과 NAT 기능의 기반이 됩니다.\n\n관련 sysctl: net.netfilter.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.netfilter.nf_log_all_netns = 0 (모든 네임스페이스 로깅 비활성화)\n- net.netfilter.nf_conntrack_max = 262144 (연결 추적 최대값, CONNTRACK 활성화 시)\n- net.netfilter.nf_conntrack_tcp_timeout_established = 432000 (TCP ESTABLISHED 타임아웃, 초)\n\n값 변경 시 발생할 수 있는 사례:\n- net.netfilter.nf_log_all_netns = 1로 변경: 모든 네트워크 네임스페이스에서 로깅 활성화, 디버깅 용이하나 로그 증가로 인한 성능 저하 가능\n- net.netfilter.nf_conntrack_max를 너무 작게 설정: 많은 연결이 있는 서버에서 연결 추적 테이블 오버플로우, 새로운 연결 거부, "nf_conntrack: table full" 에러 발생',
       functions: [], 
       position: { x: 800, y: -50 } 
     },
@@ -533,7 +533,7 @@ const networkData = {
       label: 'CONFIG_NF_CONNTRACK', 
       level: 'KERNEL_OPTION', 
       desc: '연결 추적',
-      detailedDesc: 'Netfilter 연결 추적(Connection Tracking) 기능을 활성화합니다. 상태 기반 방화벽, NAT의 연결 추적 등을 지원합니다. iptables의 -m state, -m conntrack 모듈이 필요로 합니다.\n\n관련 sysctl: net.netfilter.nf_conntrack.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.netfilter.nf_conntrack_max = 262144 (최대 연결 추적 수)\n- net.netfilter.nf_conntrack_tcp_timeout_established = 432000 (TCP ESTABLISHED 타임아웃, 초)\n- net.netfilter.nf_conntrack_tcp_timeout_time_wait = 120 (TCP TIME_WAIT 타임아웃, 초)\n- net.netfilter.nf_conntrack_tcp_timeout_close_wait = 60 (TCP CLOSE_WAIT 타임아웃, 초)\n- net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 120 (TCP FIN_WAIT 타임아웃, 초)',
+      detailedDesc: 'Netfilter 연결 추적(Connection Tracking) 기능을 활성화합니다. 상태 기반 방화벽, NAT의 연결 추적 등을 지원합니다. iptables의 -m state, -m conntrack 모듈이 필요로 합니다.\n\n관련 sysctl: net.netfilter.nf_conntrack.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.netfilter.nf_conntrack_max = 262144 (최대 연결 추적 수)\n- net.netfilter.nf_conntrack_tcp_timeout_established = 432000 (TCP ESTABLISHED 타임아웃, 초)\n- net.netfilter.nf_conntrack_tcp_timeout_time_wait = 120 (TCP TIME_WAIT 타임아웃, 초)\n- net.netfilter.nf_conntrack_tcp_timeout_close_wait = 60 (TCP CLOSE_WAIT 타임아웃, 초)\n- net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 120 (TCP FIN_WAIT 타임아웃, 초)\n\n값 변경 시 발생할 수 있는 사례:\n- net.netfilter.nf_conntrack_max를 너무 작게 설정(예: 65536): 고부하 서버에서 연결 추적 테이블 포화, 새로운 연결 거부, "nf_conntrack: table full, dropping packet" 에러 발생\n- net.netfilter.nf_conntrack_tcp_timeout_established를 너무 길게 설정(예: 864000): 메모리 사용량 증가, 오래된 연결이 테이블에 남아있어 리소스 낭비\n- net.netfilter.nf_conntrack_tcp_timeout_established를 너무 짧게 설정(예: 3600): 활성 연결이 조기에 타임아웃되어 연결 끊김, 사용자 경험 저하',
       functions: [], 
       position: { x: 1000, y: -50 } 
     },
@@ -542,7 +542,7 @@ const networkData = {
       label: 'CONFIG_NF_NAT', 
       level: 'KERNEL_OPTION', 
       desc: 'NAT 지원',
-      detailedDesc: 'Netfilter NAT(Network Address Translation) 기능을 활성화합니다. SNAT, DNAT, MASQUERADE 등의 NAT 기능을 사용하려면 필수입니다.\n\n관련 sysctl: net.netfilter.nf_nat.*, net.ipv4.ip_forward\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.netfilter.nf_nat_max = 262144 (NAT 최대 연결 수)\n- net.ipv4.ip_forward = 0 (IP 포워딩 비활성화, NAT 사용 시 1로 설정 필요)\n- net.ipv4.conf.all.forwarding = 0 (모든 인터페이스 포워딩 비활성화)\n- net.ipv4.conf.default.forwarding = 0 (기본 포워딩 비활성화)',
+      detailedDesc: 'Netfilter NAT(Network Address Translation) 기능을 활성화합니다. SNAT, DNAT, MASQUERADE 등의 NAT 기능을 사용하려면 필수입니다.\n\n관련 sysctl: net.netfilter.nf_nat.*, net.ipv4.ip_forward\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.netfilter.nf_nat_max = 262144 (NAT 최대 연결 수)\n- net.ipv4.ip_forward = 0 (IP 포워딩 비활성화, NAT 사용 시 1로 설정 필요)\n- net.ipv4.conf.all.forwarding = 0 (모든 인터페이스 포워딩 비활성화)\n- net.ipv4.conf.default.forwarding = 0 (기본 포워딩 비활성화)\n\n값 변경 시 발생할 수 있는 사례:\n- net.ipv4.ip_forward = 1로 변경: 시스템이 라우터로 동작, NAT 게이트웨이 구축 가능. 하지만 보안상 위험하므로 방화벽 규칙 필수. 내부 네트워크와 외부 네트워크 간 패킷 전달 가능\n- net.netfilter.nf_nat_max를 너무 작게 설정: 많은 NAT 연결이 있는 환경에서 NAT 테이블 포화, 새로운 NAT 연결 실패, "nf_nat: table full" 에러 발생\n- NAT 사용 시 ip_forward를 1로 설정하지 않으면: NAT 규칙이 있어도 패킷이 전달되지 않음, 내부에서 외부로의 통신 불가',
       functions: [], 
       position: { x: 1200, y: -50 } 
     },
@@ -551,7 +551,7 @@ const networkData = {
       label: 'CONFIG_XDP_SOCKETS', 
       level: 'KERNEL_OPTION', 
       desc: 'XDP 소켓',
-      detailedDesc: 'XDP(eXpress Data Path) 소켓 지원을 활성화합니다. XDP 프로그램을 사용하여 드라이버 레벨에서 고속 패킷 처리를 가능하게 합니다.\n\n관련 sysctl: 없음 (컴파일 타임 옵션)\n참고: XDP는 주로 eBPF 프로그램을 통해 제어되며, sysctl로 직접 제어되지 않습니다. XDP 프로그램은 bpf() 시스템 콜을 통해 로드됩니다. XDP 소켓은 AF_XDP 주소 패밀리를 사용합니다.',
+      detailedDesc: 'XDP(eXpress Data Path) 소켓 지원을 활성화합니다. XDP 프로그램을 사용하여 드라이버 레벨에서 고속 패킷 처리를 가능하게 합니다.\n\n관련 sysctl: 없음 (컴파일 타임 옵션)\n참고: XDP는 주로 eBPF 프로그램을 통해 제어되며, sysctl로 직접 제어되지 않습니다. XDP 프로그램은 bpf() 시스템 콜을 통해 로드됩니다. XDP 소켓은 AF_XDP 주소 패밀리를 사용합니다.\n\n사용 시나리오 및 주의사항:\n- XDP 프로그램을 잘못 작성하면: 패킷이 드롭되어 네트워크 연결 실패, 시스템 리소스 고갈 가능\n- XDP DROP 액션 사용 시: 드라이버 레벨에서 패킷이 즉시 폐기되어 Netfilter보다 빠르지만, 모든 패킷이 차단될 수 있음\n- XDP REDIRECT 사용 시: 패킷을 다른 인터페이스로 리다이렉트하여 로드 밸런싱 가능, 하지만 잘못된 설정 시 패킷 루프 발생 가능\n- XDP 활성화 시: 매우 빠른 패킷 처리 가능(마이크로초 단위), DDoS 방어에 효과적. 하지만 CPU 사용량 증가 가능',
       functions: [], 
       position: { x: 200, y: 50 } 
     },
@@ -560,7 +560,7 @@ const networkData = {
       label: 'CONFIG_BPF_SYSCALL', 
       level: 'KERNEL_OPTION', 
       desc: 'eBPF 시스템 콜',
-      detailedDesc: 'eBPF(extended Berkeley Packet Filter) 시스템 콜을 활성화합니다. XDP, TC, kprobe, uprobe 등에서 eBPF 프로그램을 사용하려면 필수입니다.\n\n관련 sysctl: kernel.unprivileged_bpf_disabled\nUbuntu 24.04 기본값:\n- kernel.unprivileged_bpf_disabled = 1 (비특권 사용자 eBPF 비활성화, 보안상 권장)\n\n참고: eBPF 프로그램은 bpf() 시스템 콜을 통해 로드되며, 특권 사용자(root)만 사용 가능합니다. 비특권 사용자가 eBPF를 사용하려면 이 값을 0으로 설정해야 하지만, 보안상 권장되지 않습니다.',
+      detailedDesc: 'eBPF(extended Berkeley Packet Filter) 시스템 콜을 활성화합니다. XDP, TC, kprobe, uprobe 등에서 eBPF 프로그램을 사용하려면 필수입니다.\n\n관련 sysctl: kernel.unprivileged_bpf_disabled\nUbuntu 24.04 기본값:\n- kernel.unprivileged_bpf_disabled = 1 (비특권 사용자 eBPF 비활성화, 보안상 권장)\n\n값 변경 시 발생할 수 있는 사례:\n- kernel.unprivileged_bpf_disabled = 0으로 변경: 비특권 사용자도 eBPF 프로그램 로드 가능, 보안 위험 증가. 악의적인 eBPF 프로그램으로 인한 시스템 공격 가능, 권한 상승 공격 위험\n- eBPF 프로그램을 잘못 작성하면: 무한 루프로 인한 커널 패닉, 시스템 리소스 고갈, 네트워크 성능 저하\n- eBPF 활성화 시: 강력한 네트워크 모니터링 및 제어 가능, XDP/TC에서 고성능 패킷 처리. 하지만 잘못된 프로그램은 시스템 안정성에 위험',
       functions: [], 
       position: { x: 400, y: 50 } 
     },
@@ -569,7 +569,7 @@ const networkData = {
       label: 'CONFIG_GRO', 
       level: 'KERNEL_OPTION', 
       desc: 'GRO (Generic Receive Offload)',
-      detailedDesc: 'GRO(Generic Receive Offload) 기능을 활성화합니다. 여러 작은 패킷을 하나의 큰 패킷으로 합쳐서 처리하여 CPU 부하를 줄입니다. NAPI와 함께 작동합니다.\n\n관련 sysctl: net.core.gro_enabled\nUbuntu 24.04 기본값:\n- net.core.gro_enabled = 1 (GRO 활성화)\n\n참고: GRO는 수신 경로에서 패킷을 합치는 기능으로, 네트워크 인터페이스별로 ethtool을 통해 제어할 수도 있습니다.',
+      detailedDesc: 'GRO(Generic Receive Offload) 기능을 활성화합니다. 여러 작은 패킷을 하나의 큰 패킷으로 합쳐서 처리하여 CPU 부하를 줄입니다. NAPI와 함께 작동합니다.\n\n관련 sysctl: net.core.gro_enabled\nUbuntu 24.04 기본값:\n- net.core.gro_enabled = 1 (GRO 활성화)\n\n값 변경 시 발생할 수 있는 사례:\n- net.core.gro_enabled = 0으로 변경: GRO 비활성화, 작은 패킷을 개별 처리하여 CPU 사용량 증가, 고속 네트워크에서 성능 저하. 특히 10Gbps 이상 네트워크에서 심각한 성능 저하 발생\n- GRO 활성화 시: CPU 효율성 향상, 인터럽트 수 감소, 처리량 증가. 하지만 일부 특수한 네트워크 애플리케이션에서는 패킷 병합으로 인한 문제 발생 가능',
       functions: [], 
       position: { x: 600, y: 50 } 
     },
@@ -578,7 +578,7 @@ const networkData = {
       label: 'CONFIG_GSO', 
       level: 'KERNEL_OPTION', 
       desc: 'GSO (Generic Segmentation Offload)',
-      detailedDesc: 'GSO(Generic Segmentation Offload) 기능을 활성화합니다. 큰 패킷을 여러 작은 패킷으로 분할하는 작업을 하드웨어나 드라이버로 오프로드하여 CPU 부하를 줄입니다.\n\n관련 sysctl: net.core.gso_enabled\nUbuntu 24.04 기본값:\n- net.core.gso_enabled = 1 (GSO 활성화)\n\n참고: GSO는 송신 경로에서 패킷을 분할하는 기능으로, 네트워크 인터페이스별로 ethtool을 통해 제어할 수도 있습니다.',
+      detailedDesc: 'GSO(Generic Segmentation Offload) 기능을 활성화합니다. 큰 패킷을 여러 작은 패킷으로 분할하는 작업을 하드웨어나 드라이버로 오프로드하여 CPU 부하를 줄입니다.\n\n관련 sysctl: net.core.gso_enabled\nUbuntu 24.04 기본값:\n- net.core.gso_enabled = 1 (GSO 활성화)\n\n값 변경 시 발생할 수 있는 사례:\n- net.core.gso_enabled = 0으로 변경: GSO 비활성화, 큰 패킷을 커널에서 분할하여 CPU 사용량 증가, 대용량 데이터 전송 시 성능 저하. 특히 고속 네트워크에서 전송 속도 제한\n- GSO 활성화 시: CPU 효율성 향상, 하드웨어 오프로드로 인한 성능 향상. 하지만 일부 네트워크 장비와의 호환성 문제 발생 가능',
       functions: [], 
       position: { x: 800, y: 50 } 
     },
@@ -587,7 +587,7 @@ const networkData = {
       label: 'CONFIG_NET_SCHED', 
       level: 'KERNEL_OPTION', 
       desc: '트래픽 제어',
-      detailedDesc: '네트워크 트래픽 제어(Traffic Control) 기능을 활성화합니다. qdisc, tc 명령어, 트래픽 shaping, policing 등을 사용하려면 필수입니다.\n\n관련 sysctl: net.core.default_qdisc, net.core.netdev_max_backlog, net.core.netdev_budget\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.core.default_qdisc = fq (기본 큐잉 규율)\n- net.core.netdev_max_backlog = 1000 (네트워크 장치 백로그 최대값)\n- net.core.netdev_budget = 300 (NAPI 폴링 예산)\n- net.core.netdev_budget_usecs = 2000 (NAPI 폴링 예산 시간, 마이크로초)',
+      detailedDesc: '네트워크 트래픽 제어(Traffic Control) 기능을 활성화합니다. qdisc, tc 명령어, 트래픽 shaping, policing 등을 사용하려면 필수입니다.\n\n관련 sysctl: net.core.default_qdisc, net.core.netdev_max_backlog, net.core.netdev_budget\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.core.default_qdisc = fq (기본 큐잉 규율)\n- net.core.netdev_max_backlog = 1000 (네트워크 장치 백로그 최대값)\n- net.core.netdev_budget = 300 (NAPI 폴링 예산)\n- net.core.netdev_budget_usecs = 2000 (NAPI 폴링 예산 시간, 마이크로초)\n\n값 변경 시 발생할 수 있는 사례:\n- net.core.netdev_max_backlog를 너무 작게 설정(예: 100): 고속 네트워크에서 패킷 드롭 발생, "netdev_max_backlog exceeded" 에러, 네트워크 성능 저하\n- net.core.netdev_max_backlog를 너무 크게 설정(예: 10000): 메모리 사용량 증가, 지연 시간 증가 가능\n- net.core.netdev_budget를 너무 작게 설정: NAPI 폴링이 빨리 종료되어 패킷 처리 지연, CPU 효율성 저하\n- net.core.default_qdisc를 pfifo_fast로 변경: 단순 FIFO 큐, 공정성 없는 스케줄링으로 인한 공정성 문제 가능',
       functions: [], 
       position: { x: 1000, y: 50 } 
     },
@@ -596,7 +596,7 @@ const networkData = {
       label: 'CONFIG_TCP_CONG_ADVANCED', 
       level: 'KERNEL_OPTION', 
       desc: 'TCP 혼잡 제어',
-      detailedDesc: '고급 TCP 혼잡 제어 알고리즘을 활성화합니다. CUBIC, BBR, Reno, Vegas 등 다양한 혼잡 제어 알고리즘을 선택할 수 있습니다.\n\n관련 sysctl: net.ipv4.tcp_congestion_control\nUbuntu 24.04 기본값:\n- net.ipv4.tcp_congestion_control = cubic (CUBIC 알고리즘 사용)\n\n사용 가능한 알고리즘: cubic, bbr, reno, vegas, westwood, htcp 등\n참고: 사용 가능한 알고리즘 목록은 /proc/sys/net/ipv4/tcp_available_congestion_control에서 확인할 수 있습니다.',
+      detailedDesc: '고급 TCP 혼잡 제어 알고리즘을 활성화합니다. CUBIC, BBR, Reno, Vegas 등 다양한 혼잡 제어 알고리즘을 선택할 수 있습니다.\n\n관련 sysctl: net.ipv4.tcp_congestion_control\nUbuntu 24.04 기본값:\n- net.ipv4.tcp_congestion_control = cubic (CUBIC 알고리즘 사용)\n\n사용 가능한 알고리즘: cubic, bbr, reno, vegas, westwood, htcp 등\n참고: 사용 가능한 알고리즘 목록은 /proc/sys/net/ipv4/tcp_available_congestion_control에서 확인할 수 있습니다.\n\n값 변경 시 발생할 수 있는 사례:\n- net.ipv4.tcp_congestion_control = bbr로 변경: Google의 BBR 알고리즘 사용, 고속 네트워크에서 더 높은 처리량과 낮은 지연 시간 제공. 하지만 일부 네트워크 환경에서는 공정성 문제 발생 가능\n- net.ipv4.tcp_congestion_control = reno로 변경: 전통적인 Reno 알고리즘, 안정적이지만 고속 네트워크에서 성능이 CUBIC보다 낮을 수 있음\n- BBR 사용 시: 대역폭 활용도 향상, 특히 고속 장거리 네트워크에서 효과적. 하지만 네트워크 혼잡 시 다른 연결과의 공정성 문제 가능',
       functions: [], 
       position: { x: 1200, y: 50 } 
     },
@@ -605,7 +605,7 @@ const networkData = {
       label: 'CONFIG_IP_ROUTE_MULTIPATH', 
       level: 'KERNEL_OPTION', 
       desc: '다중 경로 라우팅',
-      detailedDesc: '다중 경로 라우팅(Multipath Routing) 지원을 활성화합니다. 여러 경로를 통해 트래픽을 분산시킬 수 있습니다.\n\n관련 sysctl: net.ipv4.fib_multipath.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.ipv4.fib_multipath_hash_policy = 0 (해시 정책: 0=layer3, 1=layer4)\n- net.ipv4.fib_multipath_use_neigh = 0 (이웃 정보 사용 비활성화)\n- net.ipv4.fib_multipath_hash_fields = 7 (해시 필드: source IP, dest IP, source port, dest port)',
+      detailedDesc: '다중 경로 라우팅(Multipath Routing) 지원을 활성화합니다. 여러 경로를 통해 트래픽을 분산시킬 수 있습니다.\n\n관련 sysctl: net.ipv4.fib_multipath.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.ipv4.fib_multipath_hash_policy = 0 (해시 정책: 0=layer3, 1=layer4)\n- net.ipv4.fib_multipath_use_neigh = 0 (이웃 정보 사용 비활성화)\n- net.ipv4.fib_multipath_hash_fields = 7 (해시 필드: source IP, dest IP, source port, dest port)\n\n값 변경 시 발생할 수 있는 사례:\n- net.ipv4.fib_multipath_hash_policy = 1로 변경: Layer 4 해시 사용, 같은 연결의 패킷이 같은 경로를 사용하여 순서 보장. 하지만 트래픽 분산이 덜 균등할 수 있음\n- 다중 경로 라우팅 활성화 시: 여러 네트워크 경로를 통해 트래픽 분산, 대역폭 활용도 향상, 경로 장애 시 자동 전환. 하지만 패킷 순서 문제 발생 가능',
       functions: [], 
       position: { x: 1400, y: -50 } 
     },
@@ -614,7 +614,7 @@ const networkData = {
       label: 'CONFIG_IP_ADVANCED_ROUTER', 
       level: 'KERNEL_OPTION', 
       desc: '고급 라우팅',
-      detailedDesc: '고급 라우팅 기능을 활성화합니다. 다중 라우팅 테이블, 정책 기반 라우팅, 라우팅 규칙 등을 사용할 수 있습니다.\n\n관련 sysctl: net.ipv4.ip_forward, net.ipv4.conf.*.forwarding, net.ipv4.conf.*.rp_filter\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.ipv4.ip_forward = 0 (IP 포워딩 비활성화)\n- net.ipv4.conf.all.forwarding = 0 (모든 인터페이스 포워딩 비활성화)\n- net.ipv4.conf.default.forwarding = 0 (기본 포워딩 비활성화)\n- net.ipv4.conf.all.rp_filter = 1 (Reverse Path Filtering 활성화)\n- net.ipv4.conf.default.rp_filter = 1 (기본 Reverse Path Filtering 활성화)',
+      detailedDesc: '고급 라우팅 기능을 활성화합니다. 다중 라우팅 테이블, 정책 기반 라우팅, 라우팅 규칙 등을 사용할 수 있습니다.\n\n관련 sysctl: net.ipv4.ip_forward, net.ipv4.conf.*.forwarding, net.ipv4.conf.*.rp_filter\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.ipv4.ip_forward = 0 (IP 포워딩 비활성화)\n- net.ipv4.conf.all.forwarding = 0 (모든 인터페이스 포워딩 비활성화)\n- net.ipv4.conf.default.forwarding = 0 (기본 포워딩 비활성화)\n- net.ipv4.conf.all.rp_filter = 1 (Reverse Path Filtering 활성화)\n- net.ipv4.conf.default.rp_filter = 1 (기본 Reverse Path Filtering 활성화)\n\n값 변경 시 발생할 수 있는 사례:\n- net.ipv4.ip_forward = 1로 변경: 시스템이 라우터로 동작, 다른 네트워크 간 패킷 전달 가능. 보안상 위험하므로 방화벽 규칙 필수 설정 필요\n- net.ipv4.conf.all.rp_filter = 0으로 변경: Reverse Path Filtering 비활성화, 스푸핑된 패킷이 통과할 수 있어 보안 위험 증가. 하지만 비대칭 라우팅 환경에서는 필요할 수 있음\n- rp_filter = 2 (loose mode): 더 느슨한 검사, 비대칭 라우팅 환경에서 유용하나 보안은 약간 약화',
       functions: [], 
       position: { x: 1400, y: 50 } 
     },
@@ -623,7 +623,7 @@ const networkData = {
       label: 'CONFIG_TCP_MD5SIG', 
       level: 'KERNEL_OPTION', 
       desc: 'TCP MD5 시그니처',
-      detailedDesc: 'TCP MD5 시그니처 옵션을 활성화합니다. BGP 등의 프로토콜에서 TCP 연결의 무결성을 보장하기 위해 사용됩니다.\n\n관련 sysctl: net.ipv4.tcp_md5sig_enabled (커널 6.0+)\nUbuntu 24.04 기본값:\n- net.ipv4.tcp_md5sig_enabled = 0 (MD5 시그니처 비활성화, 보안상 권장)\n\n참고: 이 기능은 주로 BGP 프로토콜에서 사용되며, IPsec 등 더 안전한 방법 사용이 권장됩니다. MD5는 암호학적으로 취약하므로 최신 시스템에서는 사용을 권장하지 않습니다.',
+      detailedDesc: 'TCP MD5 시그니처 옵션을 활성화합니다. BGP 등의 프로토콜에서 TCP 연결의 무결성을 보장하기 위해 사용됩니다.\n\n관련 sysctl: net.ipv4.tcp_md5sig_enabled (커널 6.0+)\nUbuntu 24.04 기본값:\n- net.ipv4.tcp_md5sig_enabled = 0 (MD5 시그니처 비활성화, 보안상 권장)\n\n값 변경 시 발생할 수 있는 사례:\n- net.ipv4.tcp_md5sig_enabled = 1로 변경: TCP MD5 시그니처 활성화, BGP 세션 보호 가능. 하지만 MD5는 암호학적으로 취약하여 중간자 공격에 취약, 현대적인 시스템에서는 권장되지 않음\n- MD5 시그니처 사용 시: BGP 라우터 간 인증 가능, 하지만 키 관리 복잡도 증가, MD5 해시 충돌 공격 위험\n- 보안 권장사항: IPsec, TLS 등 더 안전한 프로토콜 사용 권장. BGP의 경우 TCP-AO(TCP Authentication Option) 사용 권장',
       functions: [], 
       position: { x: 1600, y: 0 } 
     }
