@@ -268,7 +268,7 @@ const networkData = {
       label: 'Netfilter', 
       level: 'NETFILTER', 
       desc: '패킷 필터링 및 NAT',
-      detailedDesc: 'Netfilter는 리눅스 커널의 패킷 필터링 및 NAT(Network Address Translation) 프레임워크입니다. iptables와 nftables의 기반이 되는 인프라로, 여러 hook 지점에서 패킷을 가로채 처리합니다. PREROUTING, INPUT, FORWARD, OUTPUT, POSTROUTING의 5가지 hook 지점에서 패킷을 검사하고, conntrack(연결 추적), NAT, 필터링, mangling 등의 작업을 수행합니다.',
+      detailedDesc: 'Netfilter는 리눅스 커널의 패킷 필터링 및 NAT(Network Address Translation) 프레임워크입니다. iptables와 nftables의 기반이 되는 인프라로, 여러 hook 지점에서 패킷을 가로채 처리합니다. PREROUTING, INPUT, FORWARD, OUTPUT, POSTROUTING의 5가지 hook 지점에서 패킷을 검사하고, conntrack(연결 추적), NAT, 필터링, mangling 등의 작업을 수행합니다.\n\n동작 방식:\n1. 패킷이 네트워크 스택을 통과할 때 각 hook 지점에서 등록된 규칙들을 순차적으로 검사합니다.\n2. 각 규칙은 ACCEPT(통과), DROP(폐기), REJECT(거부), NAT(주소 변환) 등의 액션을 수행할 수 있습니다.\n3. conntrack은 연결 상태를 추적하여 상태 기반 방화벽을 가능하게 합니다.\n4. NAT는 PREROUTING(DNAT), POSTROUTING(SNAT)에서 주로 수행됩니다.\n5. iptables는 이 hook들에 규칙을 등록하는 사용자 공간 도구입니다.',
       functions: ['nf_hook_slow()'], 
       position: { x: 1200, y: -250 } 
     },
@@ -324,7 +324,7 @@ const networkData = {
       label: 'PREROUTING', 
       level: 'NETFILTER', 
       desc: '라우팅 전 처리',
-      detailedDesc: 'PREROUTING hook은 라우팅 결정 이전에 실행되는 첫 번째 Netfilter hook입니다. 여기서 주로 DNAT(Destination NAT)와 conntrack(연결 추적)이 시작됩니다. 패킷의 목적지 주소를 변경하거나, 연결 추적 테이블에 연결 정보를 기록합니다. 이 hook은 모든 들어오는 패킷에 대해 실행되며, NF_INET_PRE_ROUTING hook point에서 처리됩니다.',
+      detailedDesc: 'PREROUTING hook은 라우팅 결정 이전에 실행되는 첫 번째 Netfilter hook입니다. 여기서 주로 DNAT(Destination NAT)와 conntrack(연결 추적)이 시작됩니다. 패킷의 목적지 주소를 변경하거나, 연결 추적 테이블에 연결 정보를 기록합니다. 이 hook은 모든 들어오는 패킷에 대해 실행되며, NF_INET_PRE_ROUTING hook point에서 처리됩니다.\n\n역할:\n- DNAT(Destination NAT): 패킷의 목적지 IP 주소를 변경합니다. 예를 들어, 외부에서 들어온 패킷의 목적지를 내부 서버로 변경할 수 있습니다.\n- 연결 추적 시작: conntrack이 패킷을 분석하여 연결 상태를 추적하기 시작합니다.\n- 패킷 mangling: TOS(Type of Service) 필드 변경 등 패킷 헤더 수정이 가능합니다.\n\n동작 방식:\n1. 패킷이 NIC에서 들어와 IP 계층에 도달한 직후 실행됩니다.\n2. 라우팅 결정 전이므로 목적지 주소를 변경할 수 있습니다.\n3. iptables의 PREROUTING 체인 규칙이 여기서 실행됩니다.\n4. DNAT 규칙이 적용되면 패킷의 목적지 IP가 변경되고, 이후 라우팅 결정에 영향을 줍니다.\n5. conntrack은 패킷을 분석하여 연결 상태(ESTABLISHED, NEW, RELATED 등)를 결정합니다.',
       functions: ['nf_hook_slow()', 'ipv4_conntrack_in()'], 
       parent: 'netfilter-rx', 
       position: { x: 1200, y: -350 } 
@@ -334,7 +334,7 @@ const networkData = {
       label: 'INPUT', 
       level: 'NETFILTER', 
       desc: '로컬 목적지 처리',
-      detailedDesc: 'INPUT hook은 로컬 시스템으로 향하는 패킷에 대해서만 실행됩니다. 라우팅 결정 후 패킷의 목적지가 로컬인 경우, 이 hook에서 패킷 필터링 규칙을 적용합니다. 방화벽 규칙, 로깅, 패킷 드롭 등의 작업이 여기서 수행됩니다. NF_INET_LOCAL_IN hook point에서 처리되며, ip_local_deliver() 함수가 이 hook을 호출합니다.',
+      detailedDesc: 'INPUT hook은 로컬 시스템으로 향하는 패킷에 대해서만 실행됩니다. 라우팅 결정 후 패킷의 목적지가 로컬인 경우, 이 hook에서 패킷 필터링 규칙을 적용합니다. 방화벽 규칙, 로깅, 패킷 드롭 등의 작업이 여기서 수행됩니다. NF_INET_LOCAL_IN hook point에서 처리되며, ip_local_deliver() 함수가 이 hook을 호출합니다.\n\n역할:\n- 로컬 수신 패킷 필터링: 로컬 시스템으로 들어오는 패킷에 대한 방화벽 규칙을 적용합니다.\n- 보안 정책 적용: 허용되지 않은 패킷을 DROP하거나 REJECT합니다.\n- 로깅: 패킷을 로그에 기록하여 보안 감사나 디버깅에 사용합니다.\n- 연결 추적 활용: conntrack의 연결 상태를 기반으로 상태 기반 방화벽 규칙을 적용할 수 있습니다.\n\n동작 방식:\n1. 라우팅 결정 후 패킷의 목적지가 로컬 시스템인 경우에만 실행됩니다.\n2. iptables의 INPUT 체인 규칙이 순차적으로 검사됩니다.\n3. 규칙이 매칭되면 해당 액션(ACCEPT, DROP, REJECT 등)이 수행됩니다.\n4. ACCEPT되면 패킷은 상위 계층(TCP/UDP)으로 전달됩니다.\n5. DROP되면 패킷이 조용히 폐기되고, REJECT되면 ICMP 에러 패킷이 전송됩니다.\n6. 상태 기반 규칙(-m state, -m conntrack)을 사용하면 ESTABLISHED 연결의 응답 패킷을 자동으로 허용할 수 있습니다.',
       functions: ['ip_local_deliver()', 'nf_hook()'], 
       parent: 'netfilter-rx', 
       position: { x: 1350, y: -350 } 
@@ -344,7 +344,7 @@ const networkData = {
       label: 'FORWARD', 
       level: 'NETFILTER', 
       desc: '포워딩 처리',
-      detailedDesc: 'FORWARD hook은 라우터 역할을 하는 시스템에서, 한 인터페이스로 들어온 패킷을 다른 인터페이스로 전달할 때 실행됩니다. 로컬 시스템이 목적지가 아닌 패킷에 대해 포워딩 규칙을 적용합니다. 이 hook에서도 패킷 필터링, 로깅 등이 수행됩니다. NF_INET_FORWARD hook point에서 처리되며, ip_forward() 함수가 이 hook을 호출합니다.',
+      detailedDesc: 'FORWARD hook은 라우터 역할을 하는 시스템에서, 한 인터페이스로 들어온 패킷을 다른 인터페이스로 전달할 때 실행됩니다. 로컬 시스템이 목적지가 아닌 패킷에 대해 포워딩 규칙을 적용합니다. 이 hook에서도 패킷 필터링, 로깅 등이 수행됩니다. NF_INET_FORWARD hook point에서 처리되며, ip_forward() 함수가 이 hook을 호출합니다.\n\n역할:\n- 라우터 패킷 필터링: 한 네트워크에서 다른 네트워크로 전달되는 패킷에 대한 방화벽 규칙을 적용합니다.\n- 네트워크 간 보안 정책: 내부 네트워크와 외부 네트워크 간 트래픽을 제어합니다.\n- 포워딩 제어: 특정 패킷의 포워딩을 허용하거나 차단할 수 있습니다.\n\n동작 방식:\n1. 라우팅 결정 후 패킷의 목적지가 다른 호스트인 경우에만 실행됩니다.\n2. ip_forward = 1로 설정되어 있어야 포워딩이 가능합니다.\n3. iptables의 FORWARD 체인 규칙이 순차적으로 검사됩니다.\n4. ACCEPT되면 패킷이 출력 인터페이스로 전달됩니다.\n5. DROP되면 패킷이 폐기되어 전달되지 않습니다.\n6. NAT와 함께 사용하면 포트 포워딩이나 라우터의 방화벽 역할을 수행할 수 있습니다.\n7. 일반적으로 로컬 시스템이 라우터나 게이트웨이 역할을 할 때 사용됩니다.',
       functions: ['ip_forward()', 'nf_hook()'], 
       parent: 'netfilter-rx', 
       position: { x: 1200, y: -150 } 
@@ -401,7 +401,7 @@ const networkData = {
       label: 'Netfilter OUTPUT', 
       level: 'NETFILTER', 
       desc: '출력 전 필터링',
-      detailedDesc: 'OUTPUT hook은 로컬 시스템에서 생성된 패킷이 네트워크로 나가기 전에 실행됩니다. 여기서 SNAT(Source NAT)의 일부와 방화벽 규칙이 적용됩니다. 로컬에서 생성된 패킷에 대한 필터링과 NAT 변환이 수행됩니다. NF_INET_LOCAL_OUT hook point에서 처리되며, ip_local_out() 함수가 이 hook을 호출합니다.',
+      detailedDesc: 'OUTPUT hook은 로컬 시스템에서 생성된 패킷이 네트워크로 나가기 전에 실행됩니다. 여기서 SNAT(Source NAT)의 일부와 방화벽 규칙이 적용됩니다. 로컬에서 생성된 패킷에 대한 필터링과 NAT 변환이 수행됩니다. NF_INET_LOCAL_OUT hook point에서 처리되며, ip_local_out() 함수가 이 hook을 호출합니다.\n\n역할:\n- 로컬 송신 패킷 필터링: 로컬 시스템에서 나가는 패킷에 대한 방화벽 규칙을 적용합니다.\n- 송신 보안 정책: 특정 목적지나 포트로의 연결을 차단할 수 있습니다.\n- SNAT 초기 단계: 일부 SNAT 작업이 여기서 수행될 수 있습니다.\n- 로깅: 나가는 패킷을 로그에 기록합니다.\n\n동작 방식:\n1. 로컬 애플리케이션이 패킷을 생성하여 네트워크 스택으로 전달한 후, 라우팅 결정 전에 실행됩니다.\n2. iptables의 OUTPUT 체인 규칙이 순차적으로 검사됩니다.\n3. 규칙이 매칭되면 해당 액션(ACCEPT, DROP, REJECT 등)이 수행됩니다.\n4. ACCEPT되면 패킷은 라우팅 결정을 거쳐 POSTROUTING으로 전달됩니다.\n5. DROP되면 패킷이 폐기되어 전송되지 않습니다.\n6. 상태 기반 규칙을 사용하면 ESTABLISHED 연결의 응답 패킷을 자동으로 허용할 수 있습니다.\n7. 예를 들어, 특정 웹사이트로의 접근을 차단하거나, 특정 포트로의 연결을 제한할 수 있습니다.',
       functions: ['nf_hook()', 'ipv4_conntrack_local()', 'ip_local_out()'], 
       position: { x: 600, y: 250 } 
     },
@@ -419,7 +419,7 @@ const networkData = {
       label: 'Netfilter POSTROUTING', 
       level: 'NETFILTER', 
       desc: '라우팅 후 처리',
-      detailedDesc: 'POSTROUTING hook은 라우팅 결정 후, 패킷이 실제로 네트워크 인터페이스로 전송되기 직전에 실행되는 마지막 Netfilter hook입니다. 여기서 SNAT(Source NAT)의 최종 단계가 수행되고, 패킷의 소스 주소가 변경됩니다. 또한 마지막 방화벽 체크와 패킷 mangling이 수행됩니다. NF_INET_POST_ROUTING hook point에서 처리됩니다.',
+      detailedDesc: 'POSTROUTING hook은 라우팅 결정 후, 패킷이 실제로 네트워크 인터페이스로 전송되기 직전에 실행되는 마지막 Netfilter hook입니다. 여기서 SNAT(Source NAT)의 최종 단계가 수행되고, 패킷의 소스 주소가 변경됩니다. 또한 마지막 방화벽 체크와 패킷 mangling이 수행됩니다. NF_INET_POST_ROUTING hook point에서 처리됩니다.\n\n역할:\n- SNAT(Source NAT): 패킷의 소스 IP 주소를 변경합니다. MASQUERADE는 동적 IP 환경에서 사용되는 SNAT의 특수 형태입니다.\n- 최종 패킷 수정: 라우팅 결정 후이므로 출력 인터페이스를 알 수 있어, 해당 인터페이스의 IP로 소스 주소를 변경할 수 있습니다.\n- 패킷 mangling: TTL(Time To Live) 변경, TOS 필드 수정 등이 가능합니다.\n- 마지막 필터링: 전송 직전 마지막 보안 체크를 수행할 수 있습니다.\n\n동작 방식:\n1. 라우팅 결정이 완료된 후, 출력 인터페이스가 결정된 상태에서 실행됩니다.\n2. iptables의 POSTROUTING 체인 규칙이 순차적으로 검사됩니다.\n3. SNAT 규칙이 적용되면 패킷의 소스 IP 주소가 변경됩니다.\n4. MASQUERADE는 동적 IP 환경에서 자동으로 출력 인터페이스의 IP를 소스로 사용합니다.\n5. NAT 테이블에 연결 정보가 기록되어, 응답 패킷이 올바르게 역변환됩니다.\n6. 패킷이 드라이버로 전달되어 실제 네트워크로 전송됩니다.\n7. 예를 들어, 내부 네트워크(192.168.1.0/24)의 패킷이 외부로 나갈 때 소스 IP를 공인 IP로 변경하는 것이 여기서 수행됩니다.',
       functions: ['nf_hook()', 'ip_finish_output()'], 
       position: { x: 1200, y: 250 } 
     },
