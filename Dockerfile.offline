@@ -1,0 +1,14 @@
+FROM nginx:alpine
+
+# 로컬에 다운로드된 cytoscape.min.js 파일 사용
+# 빌드 전에 download-dependencies.sh를 실행하여 js/cytoscape.min.js 파일을 준비해야 합니다
+COPY js/cytoscape.min.js /usr/share/nginx/html/js/cytoscape.min.js
+
+# index.html 복사
+COPY index.html /usr/share/nginx/html/
+
+# nginx 설정 (기본 설정 사용)
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+
