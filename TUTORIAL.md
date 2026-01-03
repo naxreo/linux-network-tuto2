@@ -13,7 +13,8 @@
 7. [Socket 레벨 실습](#7-socket-레벨-실습)
 8. [TCP 레벨 실습](#8-tcp-레벨-실습)
 9. [qdisc/TC 레벨 실습](#9-qdisctc-레벨-실습)
-10. [전체 흐름 추적](#10-전체-흐름-추적)
+10. [패킷 드롭 및 RST 확인 실습](#10-패킷-드롭-및-rst-확인-실습)
+11. [전체 흐름 추적](#11-전체-흐름-추적)
 
 ---
 
@@ -939,7 +940,554 @@ tc qdisc show dev eth0
 
 ---
 
-## 10. 전체 흐름 추적
+## 10. 패킷 드롭 및 RST 확인 실습
+
+### 10.1 이론
+
+리눅스 네트워크 스택의 여러 계층에서 패킷이 드롭되거나 RST 패킷이 전송될 수 있습니다.
+
+**패킷 드롭 발생 지점:**
+- **NIC RX Ring 버퍼 오버플로우**: 링 버퍼가 가득 찬 경우
+- **NAPI 백로그 초과**: netdev_max_backlog 초과
+- **XDP DROP**: XDP 프로그램에서 DROP 액션
+- **Netfilter DROP/REJECT**: iptables 규칙에 의한 차단
+- **라우팅 실패**: 라우팅 테이블에 경로 없음, TTL 만료
+- **TCP 에러**: 체크섬 에러, 시퀀스 번호 범위 밖
+- **qdisc 큐 오버플로우**: 트래픽 제어 큐 포화
+
+**RST 패킷 발생 지점:**
+- **TCP RST (RX 경로)**: 존재하지 않는 포트, CLOSED 소켓
+- **TCP RST (TX 경로)**: 애플리케이션 강제 종료
+- **Netfilter REJECT**: iptables REJECT 규칙
+
+### 10.2 실습: NIC RX Ring 버퍼 오버플로우 확인
+
+#### 10.2.1 드롭 통계 확인
+
+```bash
+# NIC 드롭 통계 확인
+cat /proc/net/dev | grep -E "drop|errs"
+
+# 더 자세한 통계 (ethtool)
+sudo ethtool -S eth0 | grep -i drop
+
+# 실시간 드롭 모니터링
+watch -n 1 'cat /proc/net/dev | grep eth0'
+```
+
+#### 10.2.2 RX Ring 버퍼 크기 축소 (드롭 유발)
+
+```bash
+# 현재 RX Ring 버퍼 크기 확인
+sudo ethtool -g eth0
+
+# RX Ring 버퍼 크기를 작게 설정 (드롭 유발)
+sudo ethtool -G eth0 rx 64
+
+# 확인
+sudo ethtool -g eth0
+```
+
+#### 10.2.3 고속 트래픽 생성 및 드롭 확인
+
+**클라이언트에서 실행:**
+```bash
+# 서버로 대량의 패킷 전송
+for i in {1..10000}; do
+    curl -s http://192.168.100.10/ > /dev/null 2>&1 &
+done
+wait
+```
+
+**서버에서 드롭 확인:**
+```bash
+# 드롭 카운터 증가 확인
+watch -n 1 'cat /proc/net/dev | grep eth0 | awk "{print \$4, \$5}"'
+```
+
+#### 10.2.4 원래 설정 복원
+
+```bash
+# RX Ring 버퍼 크기 복원 (기본값 또는 적절한 값)
+sudo ethtool -G eth0 rx 4096
+
+# 확인
+sudo ethtool -g eth0
+```
+
+### 10.3 실습: NAPI 백로그 초과 확인
+
+#### 10.3.1 netdev_max_backlog 값 확인 및 축소
+
+```bash
+# 현재 값 확인
+sysctl net.core.netdev_max_backlog
+
+# 값을 매우 작게 설정 (드롭 유발)
+sudo sysctl -w net.core.netdev_max_backlog=10
+
+# 확인
+sysctl net.core.netdev_max_backlog
+```
+
+#### 10.3.2 NAPI 백로그 통계 확인
+
+```bash
+# NAPI 백로그 통계 확인
+cat /proc/net/softnet_stat
+
+# 각 필드 의미:
+# - 첫 번째: 처리된 패킷 수
+# - 두 번째: 드롭된 패킷 수
+# - 세 번째: 시간 초과
+# - 네 번째: CPU 마이그레이션
+
+# 실시간 모니터링
+watch -n 1 'cat /proc/net/softnet_stat'
+```
+
+#### 10.3.3 고속 트래픽 생성 및 백로그 초과 확인
+
+**클라이언트에서 실행:**
+```bash
+# 동시에 많은 연결 생성
+ab -n 10000 -c 500 http://192.168.100.10/
+```
+
+**서버에서 확인:**
+```bash
+# 커널 메시지에서 백로그 초과 확인
+sudo dmesg | grep -i "backlog"
+
+# 또는 실시간 확인
+sudo tail -f /var/log/kern.log | grep -i backlog
+
+# softnet_stat에서 드롭 확인
+watch -n 1 'cat /proc/net/softnet_stat | awk "{print \$2}"'
+```
+
+#### 10.3.4 원래 설정 복원
+
+```bash
+# netdev_max_backlog 복원
+sudo sysctl -w net.core.netdev_max_backlog=1000
+
+# 확인
+sysctl net.core.netdev_max_backlog
+```
+
+### 10.4 실습: Netfilter DROP 확인
+
+#### 10.4.1 DROP 규칙 추가
+
+```bash
+# INPUT 체인에 DROP 규칙 추가 (특정 IP 차단)
+sudo iptables -A INPUT -s 192.168.100.20 -j DROP
+
+# 규칙 확인
+sudo iptables -L -n -v | grep DROP
+```
+
+#### 10.4.2 DROP 통계 확인
+
+```bash
+# iptables 통계 확인 (DROP된 패킷 수)
+sudo iptables -L -n -v | grep DROP
+
+# 실시간 통계 모니터링
+watch -n 1 'sudo iptables -L -n -v | grep DROP'
+```
+
+#### 10.4.3 클라이언트에서 연결 시도
+
+```bash
+# 서버로 연결 시도 (차단됨)
+curl -v http://192.168.100.10/
+ping -c 3 192.168.100.10
+
+# 타임아웃 발생 확인
+```
+
+#### 10.4.4 패킷 캡처로 DROP 확인
+
+**서버에서 실행:**
+```bash
+# 패킷 캡처 (DROP된 패킷은 보이지 않지만, 도착하는 패킷은 확인 가능)
+sudo tcpdump -i eth0 -n 'host 192.168.100.20'
+```
+
+#### 10.4.5 DROP 규칙 제거
+
+```bash
+# DROP 규칙 제거
+sudo iptables -D INPUT -s 192.168.100.20 -j DROP
+
+# 확인
+sudo iptables -L -n -v
+```
+
+### 10.5 실습: Netfilter REJECT (RST) 확인
+
+#### 10.5.1 REJECT 규칙 추가
+
+```bash
+# INPUT 체인에 REJECT 규칙 추가 (TCP RST 전송)
+sudo iptables -A INPUT -p tcp --dport 80 -j REJECT --reject-with tcp-reset
+
+# 또는 ICMP port unreachable (UDP의 경우)
+# sudo iptables -A INPUT -p udp --dport 53 -j REJECT --reject-with icmp-port-unreachable
+
+# 규칙 확인
+sudo iptables -L -n -v | grep REJECT
+```
+
+#### 10.5.2 클라이언트에서 연결 시도 및 RST 확인
+
+**클라이언트에서 실행:**
+```bash
+# 연결 시도
+curl -v http://192.168.100.10/
+
+# 예상 결과: "Connection refused" 또는 즉시 실패
+```
+
+**서버에서 패킷 캡처:**
+```bash
+# RST 패킷 캡처
+sudo tcpdump -i eth0 -n 'tcp port 80 and tcp[tcpflags] & tcp-rst != 0'
+```
+
+**클라이언트에서 패킷 캡처:**
+```bash
+# RST 패킷 수신 확인
+sudo tcpdump -i eth0 -n 'tcp port 80 and tcp[tcpflags] & tcp-rst != 0'
+```
+
+#### 10.5.3 REJECT vs DROP 비교
+
+```bash
+# REJECT 규칙 제거
+sudo iptables -D INPUT -p tcp --dport 80 -j REJECT --reject-with tcp-reset
+
+# DROP 규칙 추가
+sudo iptables -A INPUT -p tcp --dport 80 -j DROP
+
+# 클라이언트에서 연결 시도 (타임아웃 발생)
+curl -v --max-time 5 http://192.168.100.10/
+
+# REJECT로 변경
+sudo iptables -D INPUT -p tcp --dport 80 -j DROP
+sudo iptables -A INPUT -p tcp --dport 80 -j REJECT --reject-with tcp-reset
+
+# 클라이언트에서 연결 시도 (즉시 실패)
+curl -v http://192.168.100.10/
+```
+
+#### 10.5.4 REJECT 규칙 제거
+
+```bash
+# REJECT 규칙 제거
+sudo iptables -D INPUT -p tcp --dport 80 -j REJECT --reject-with tcp-reset
+
+# 확인
+sudo iptables -L -n -v
+```
+
+### 10.6 실습: 라우팅 실패 확인
+
+#### 10.6.1 라우팅 테이블에서 경로 제거
+
+```bash
+# 현재 라우팅 테이블 확인
+ip route show
+
+# 기본 게이트웨이 제거 (임시)
+sudo ip route del default
+
+# 라우팅 테이블 확인
+ip route show
+```
+
+#### 10.6.2 외부 네트워크로의 연결 시도
+
+**클라이언트에서 실행:**
+```bash
+# 외부 네트워크로 연결 시도 (라우팅 실패)
+ping -c 3 8.8.8.8
+
+# 예상 결과: "Network is unreachable" 또는 "No route to host"
+```
+
+#### 10.6.3 라우팅 드롭 통계 확인
+
+```bash
+# IP 통계 확인
+cat /proc/net/snmp | grep -i ip
+
+# 라우팅 실패 통계 확인
+ip -s link show eth0
+```
+
+#### 10.6.4 라우팅 복원
+
+```bash
+# 기본 게이트웨이 복원 (실제 게이트웨이 IP로 변경)
+sudo ip route add default via 192.168.100.1
+
+# 확인
+ip route show
+```
+
+### 10.7 실습: TCP 에러로 인한 드롭 확인
+
+#### 10.7.1 TCP 통계 확인
+
+```bash
+# TCP 통계 확인
+netstat -s | grep -i tcp
+
+# 또는 ss 사용
+ss -s
+
+# TCP 에러 통계
+cat /proc/net/sockstat
+```
+
+#### 10.7.2 잘못된 시퀀스 번호 패킷 생성 (고급)
+
+**주의**: 이 실습은 고급 사용자를 위한 것입니다. 실제 환경에서는 사용하지 마세요.
+
+```bash
+# scapy를 사용한 패킷 조작 (설치 필요)
+sudo apt install -y python3-scapy
+
+# Python 스크립트로 잘못된 시퀀스 번호를 가진 패킷 전송
+python3 << 'EOF'
+from scapy.all import *
+# 잘못된 시퀀스 번호로 패킷 전송
+packet = IP(dst="192.168.100.10")/TCP(dport=80, flags="A", seq=999999999)
+send(packet, verbose=1)
+EOF
+```
+
+#### 10.7.3 TCP 체크섬 에러 확인
+
+```bash
+# TCP 체크섬 에러 통계
+netstat -s | grep -i "checksum"
+
+# 인터페이스 에러 통계
+cat /proc/net/dev | grep -E "errs|drop"
+```
+
+### 10.8 실습: 존재하지 않는 포트로의 연결 (RST 확인)
+
+#### 10.8.1 nginx 중지
+
+```bash
+# nginx 중지
+sudo systemctl stop nginx
+
+# 포트 80이 닫혀있는지 확인
+sudo ss -tln | grep :80
+```
+
+#### 10.8.2 클라이언트에서 연결 시도
+
+```bash
+# 존재하지 않는 포트로 연결 시도
+curl -v http://192.168.100.10/
+
+# 또는 telnet 사용
+telnet 192.168.100.10 80
+
+# 예상 결과: "Connection refused"
+```
+
+#### 10.8.3 RST 패킷 캡처
+
+**서버에서 실행:**
+```bash
+# RST 패킷 캡처
+sudo tcpdump -i eth0 -n 'tcp port 80 and tcp[tcpflags] & tcp-rst != 0' -v
+```
+
+**클라이언트에서 실행:**
+```bash
+# RST 패킷 수신 확인
+sudo tcpdump -i eth0 -n 'tcp port 80 and tcp[tcpflags] & tcp-rst != 0' -v
+
+# 연결 시도
+curl http://192.168.100.10/
+```
+
+#### 10.8.4 nginx 재시작
+
+```bash
+# nginx 재시작
+sudo systemctl start nginx
+
+# 확인
+sudo ss -tln | grep :80
+```
+
+### 10.9 실습: qdisc 큐 오버플로우 확인
+
+#### 10.9.1 qdisc 큐 크기 제한 설정
+
+```bash
+# 기존 qdisc 제거
+sudo tc qdisc del dev eth0 root
+
+# 매우 작은 큐 크기로 qdisc 설정 (pfifo, 큐 크기 10)
+sudo tc qdisc add dev eth0 root handle 1: pfifo limit 10
+
+# 확인
+tc -s qdisc show dev eth0
+```
+
+#### 10.9.2 고속 트래픽 생성
+
+**클라이언트에서 실행:**
+```bash
+# 대량의 패킷 전송
+for i in {1..1000}; do
+    curl -s http://192.168.100.10/ > /dev/null 2>&1 &
+done
+wait
+```
+
+#### 10.9.3 qdisc 드롭 확인
+
+**서버에서 실행:**
+```bash
+# qdisc 드롭 통계 확인
+tc -s qdisc show dev eth0 | grep -i drop
+
+# 실시간 모니터링
+watch -n 1 'tc -s qdisc show dev eth0 | grep -E "dropped|overlimits"'
+```
+
+#### 10.9.4 qdisc 복원
+
+```bash
+# qdisc 제거
+sudo tc qdisc del dev eth0 root
+
+# 기본 qdisc로 복원
+sudo tc qdisc add dev eth0 root handle 1: fq
+
+# 확인
+tc qdisc show dev eth0
+```
+
+### 10.10 실습: 종합 드롭 모니터링 스크립트
+
+#### 10.10.1 드롭 모니터링 스크립트 생성
+
+```bash
+cat > /tmp/monitor_drops.sh << 'EOF'
+#!/bin/bash
+
+echo "=== 패킷 드롭 및 RST 모니터링 ==="
+echo "시간: $(date)"
+echo ""
+
+# 1. NIC 드롭
+echo "--- NIC 드롭 통계 ---"
+cat /proc/net/dev | grep eth0 | awk '{print "RX drops:", $4, "TX drops:", $12}'
+echo ""
+
+# 2. NAPI 백로그 드롭
+echo "--- NAPI 백로그 드롭 ---"
+cat /proc/net/softnet_stat | awk '{sum+=$2} END {print "Total drops:", sum}'
+echo ""
+
+# 3. iptables DROP/REJECT
+echo "--- Netfilter DROP/REJECT ---"
+sudo iptables -L -n -v | grep -E "DROP|REJECT" | awk '{print $2, $8, $9}'
+echo ""
+
+# 4. TCP 에러
+echo "--- TCP 에러 통계 ---"
+netstat -s | grep -E "segments retransmitted|bad segments|checksum errors" | head -5
+echo ""
+
+# 5. qdisc 드롭
+echo "--- qdisc 드롭 ---"
+tc -s qdisc show dev eth0 2>/dev/null | grep -E "dropped|overlimits" || echo "No qdisc drops"
+echo ""
+
+# 6. 소켓 통계
+echo "--- 소켓 통계 ---"
+ss -s | grep -E "TCP|UDP"
+echo ""
+
+echo "=== 모니터링 완료 ==="
+EOF
+
+chmod +x /tmp/monitor_drops.sh
+```
+
+#### 10.10.2 실시간 모니터링
+
+```bash
+# 실시간 모니터링 (5초마다)
+watch -n 5 /tmp/monitor_drops.sh
+```
+
+### 10.11 실습: 패킷 드롭 원인 분석
+
+#### 10.11.1 드롭 발생 시나리오별 확인 방법
+
+**NIC RX Ring 오버플로우:**
+```bash
+# 확인 방법
+ethtool -S eth0 | grep rx_dropped
+cat /proc/net/dev | grep eth0 | awk '{print "RX drops:", $4}'
+```
+
+**NAPI 백로그 초과:**
+```bash
+# 확인 방법
+cat /proc/net/softnet_stat | awk '{print "Drops:", $2}'
+dmesg | grep -i "backlog"
+```
+
+**Netfilter DROP:**
+```bash
+# 확인 방법
+sudo iptables -L -n -v | grep DROP
+sudo iptables -t mangle -L -n -v | grep DROP
+```
+
+**라우팅 실패:**
+```bash
+# 확인 방법
+ip route get <destination>
+cat /proc/net/snmp | grep -i ip
+```
+
+**TCP 에러:**
+```bash
+# 확인 방법
+netstat -s | grep -i tcp
+ss -s
+```
+
+#### 10.11.2 드롭 로그 분석
+
+```bash
+# 커널 메시지에서 드롭 관련 로그 확인
+sudo dmesg | grep -iE "drop|error|fail"
+
+# 시스템 로그 확인
+sudo journalctl -k | grep -iE "drop|error|fail" | tail -20
+```
+
+---
+
+## 11. 전체 흐름 추적
 
 ### 10.1 이론
 
