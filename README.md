@@ -52,6 +52,30 @@ docker rm network-map
 - **상세 설명**: 각 노드의 역할, 동작 방식, sysctl 설정 등 상세 정보 제공
 - **실습 튜토리얼**: 두 대의 리눅스 장비와 nginx를 사용한 단계별 실습 가이드 (`tutorial.html`)
 
+## 마크다운을 HTML로 변환
+
+`md_to_html.py` 스크립트를 사용하여 마크다운 파일을 HTML로 변환할 수 있습니다.
+
+```bash
+# 기본 사용법
+python3 md_to_html.py TUTORIAL.md tutorial.html
+
+# 옵션 지정 (제목, 네비게이션 링크)
+python3 md_to_html.py TUTORIAL.md tutorial.html \
+  "리눅스 네트워크 스택 실습 튜토리얼" \
+  "index.html" \
+  "← 네트워크 흐름도"
+```
+
+스크립트는 다음을 지원합니다:
+- 제목 (h1-h4)
+- 코드 블록 (언어별 하이라이팅)
+- 인라인 코드
+- 리스트 (순서 있음/없음)
+- 링크
+- 강조 (볼드)
+- 구분선
+
 ## 오프라인 환경
 
 이 Docker 이미지는 외부 네트워크와 단절된 환경에서도 동작합니다. 모든 JavaScript 라이브러리는 컨테이너 내부에 포함되어 있습니다.
