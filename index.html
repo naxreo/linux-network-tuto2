@@ -747,6 +747,14 @@ const cy = cytoscape({
       }
     },
     {
+      selector: 'edge[sourceLevel = "KERNEL_OPTION"]',
+      style: {
+        'line-color': LEVEL_COLORS.KERNEL_OPTION,
+        'target-arrow-color': LEVEL_COLORS.KERNEL_OPTION,
+        'line-style': 'dashed'
+      }
+    },
+    {
       selector: 'node[level = "HARDWARE"]',
       style: {
         'background-color': LEVEL_COLORS.HARDWARE
@@ -831,12 +839,16 @@ const cy = cytoscape({
       position: node.position,
       classes: node.parent ? 'detail-node' : 'main-node'
     })),
-    edges: networkData.edges.map(edge => ({
-      data: {
-        source: edge.source,
-        target: edge.target
-      }
-    }))
+    edges: networkData.edges.map(edge => {
+      const sourceNode = networkData.nodes.find(n => n.id === edge.source);
+      return {
+        data: {
+          source: edge.source,
+          target: edge.target,
+          sourceLevel: sourceNode ? sourceNode.level : null
+        }
+      };
+    })
   },
   
   layout: {
