@@ -237,7 +237,7 @@ const networkData = {
       label: 'Driver', 
       level: 'DRIVER', 
       desc: '네트워크 카드 드라이버',
-      detailedDesc: 'NIC 하드웨어와 커널 네트워크 스택을 연결하는 드라이버입니다. 인터럽트 핸들러에서 패킷 수신을 감지하면, NAPI(New API) 스케줄링을 통해 인터럽트 기반 처리를 폴링 기반으로 전환합니다. 이는 고속 네트워크에서 인터럽트 폭주를 방지하기 위한 메커니즘입니다.',
+      detailedDesc: 'NIC 하드웨어와 커널 네트워크 스택을 연결하는 드라이버입니다. 인터럽트 핸들러에서 패킷 수신을 감지하면, NAPI(New API) 스케줄링을 통해 인터럽트 기반 처리를 폴링 기반으로 전환합니다. 이는 고속 네트워크에서 인터럽트 폭주를 방지하기 위한 메커니즘입니다.\n\nOSI 계층: L2 (Data Link Layer) 처리 시작\n- NIC에서 Ethernet 프레임 수신\n- DMA를 통해 RX Ring Buffer에 Ethernet 프레임 적재\n- 하드웨어 인터럽트 발생\n\nNAPI 폴링 중 패킷이 도착하는 속도가 처리 속도를 초과하면, net.core.netdev_max_backlog 큐에 패킷이 쌓입니다. 이 큐는 "아직 프로토콜 처리 전 패킷"을 임시로 보관하는 버퍼로, CPU/NAPI 처리 지연을 흡수합니다. 큐가 가득 차면 패킷이 드롭됩니다. 이는 소켓 버퍼(rmem_max)와는 완전히 다른 단계의 버퍼입니다.',
       functions: ['napi_schedule()', 'driver_poll()'], 
       position: { x: 300, y: -250 } 
     },
@@ -246,7 +246,7 @@ const networkData = {
       label: 'XDP', 
       level: 'XDP', 
       desc: 'eBPF 기반 드라이버 레벨 처리 (옵션)',
-      detailedDesc: 'XDP(eXpress Data Path)는 eBPF 프로그램을 사용하여 드라이버 레벨에서 매우 빠른 패킷 처리를 가능하게 합니다. skb 생성 이전 또는 직후에 실행되며, Netfilter보다 먼저 처리됩니다. DROP(패킷 폐기), PASS(통과), TX(재전송), REDIRECT(다른 인터페이스로 리다이렉트) 등의 액션을 수행할 수 있습니다. DDoS 방어, 로드 밸런싱, 패킷 필터링 등에 사용됩니다.',
+      detailedDesc: 'XDP(eXpress Data Path)는 eBPF 프로그램을 사용하여 드라이버 레벨에서 매우 빠른 패킷 처리를 가능하게 합니다. skb 생성 이전 또는 직후에 실행되며, Netfilter보다 먼저 처리됩니다. DROP(패킷 폐기), PASS(통과), TX(재전송), REDIRECT(다른 인터페이스로 리다이렉트) 등의 액션을 수행할 수 있습니다. DDoS 방어, 로드 밸런싱, 패킷 필터링 등에 사용됩니다.\n\nOSI 계층: L2 (Data Link Layer) 처리\n- Ethernet 프레임 레벨에서 처리 (skb 생성 이전 또는 직후)\n- Ethernet 헤더 정보(MAC 주소 등)에 접근 가능\n- IP 헤더는 아직 파싱되지 않은 상태이지만, raw 패킷 데이터로 접근 가능\n- 매우 빠른 처리 속도 (마이크로초 단위)',
       functions: ['bpf_prog_run_xdp()', 'xdp_do_redirect()'], 
       position: { x: 450, y: -150 } 
     },
@@ -255,7 +255,7 @@ const networkData = {
       label: 'NAPI', 
       level: 'KERNEL_LOW', 
       desc: '인터럽트 → 폴링 전환',
-      detailedDesc: 'NAPI(New API)는 고속 네트워크 환경에서 인터럽트 폭주를 방지하기 위한 메커니즘입니다. 초기 인터럽트 후에는 폴링 모드로 전환되어 여러 패킷을 한 번에 처리합니다. 이는 CPU 효율성을 크게 향상시킵니다. struct napi_struct 구조체로 관리되며, GRO(Generic Receive Offload)와 함께 작동하여 패킷을 효율적으로 처리합니다.',
+      detailedDesc: 'NAPI(New API)는 고속 네트워크 환경에서 인터럽트 폭주를 방지하기 위한 메커니즘입니다. 초기 인터럽트 후에는 폴링 모드로 전환되어 여러 패킷을 한 번에 처리합니다. 이는 CPU 효율성을 크게 향상시킵니다. struct napi_struct 구조체로 관리되며, GRO(Generic Receive Offload)와 함께 작동하여 패킷을 효율적으로 처리합니다.\n\nOSI 계층: L2 (Data Link Layer) 처리 계속\n- Ethernet 프레임 처리\n- Ethernet 헤더 제거 및 프로토콜 타입 확인 (ETH_P_IP, ETH_P_ARP 등)\n- napi_gro_receive()에서 GRO(Generic Receive Offload) 처리\n- 프로토콜 타입에 따라 상위 계층으로 전달 준비\n\nNAPI 폴링 중 패킷 처리 속도가 패킷 도착 속도를 따라가지 못하면, net.core.netdev_max_backlog 큐에 패킷이 쌓입니다. 이 큐는 프로토콜 스택(IP/TCP/UDP) 처리 이전 단계의 버퍼로, NAPI가 패킷을 처리할 시간을 벌어줍니다. 큐 크기를 초과하면 패킷이 드롭됩니다. 이는 이후 단계의 소켓 버퍼(rmem_max)와는 완전히 독립적인 버퍼입니다.',
       functions: ['napi_poll()', 'napi_gro_receive()'], 
       position: { x: 600, y: -250 } 
     },
@@ -264,7 +264,7 @@ const networkData = {
       label: 'sk_buff', 
       level: 'KERNEL_LOW', 
       desc: '패킷 메타데이터 구조체',
-      detailedDesc: 'sk_buff(socket buffer)는 리눅스 커널에서 모든 네트워크 패킷을 표현하는 핵심 데이터 구조입니다. 패킷 데이터와 메타데이터(프로토콜, 길이, 네트워크 인터페이스, 라우팅 정보 등)를 포함합니다. 이 구조체는 네트워크 스택 전체를 통과하며, 각 계층에서 필요한 정보를 추가하거나 수정합니다. 주요 필드로는 skb->data(패킷 데이터), skb->len(길이), skb->protocol(프로토콜), skb->dev(네트워크 장치) 등이 있습니다.',
+      detailedDesc: 'sk_buff(socket buffer)는 리눅스 커널에서 모든 네트워크 패킷을 표현하는 핵심 데이터 구조입니다. 패킷 데이터와 메타데이터(프로토콜, 길이, 네트워크 인터페이스, 라우팅 정보 등)를 포함합니다. 이 구조체는 네트워크 스택 전체를 통과하며, 각 계층에서 필요한 정보를 추가하거나 수정합니다. 주요 필드로는 skb->data(패킷 데이터), skb->len(길이), skb->protocol(프로토콜), skb->dev(네트워크 장치) 등이 있습니다.\n\nOSI 계층: L2 → L3 전환\n- build_skb()로 sk_buff 구조체 생성\n- netif_receive_skb()에서 프로토콜 타입 확인 (ETH_P_IP 등)\n- 프로토콜 타입에 따라 상위 계층 핸들러로 전달\n  - ETH_P_IP → ip_rcv() (L3 처리 시작)\n  - ETH_P_ARP → arp_rcv()\n  - 기타 프로토콜 타입에 따라 해당 핸들러로 전달',
       functions: ['build_skb()', 'netif_receive_skb()'], 
       position: { x: 900, y: -250 } 
     },
@@ -282,7 +282,7 @@ const networkData = {
       label: 'Routing', 
       level: 'ROUTING', 
       desc: '라우팅 테이블 조회',
-      detailedDesc: '라우팅 결정 단계에서는 FIB(Forwarding Information Base)를 조회하여 패킷의 목적지가 로컬 시스템인지, 다른 호스트로 포워딩해야 하는지 결정합니다. ip_route_input_noref() 함수가 라우팅 테이블을 조회하고, 결과에 따라 로컬 수신(INPUT) 또는 포워딩(FORWARD) 경로로 분기합니다. 라우팅 결정 후에는 패킷의 목적지 인터페이스와 게이트웨이 정보가 skb에 설정됩니다.',
+      detailedDesc: '라우팅 결정 단계에서는 FIB(Forwarding Information Base)를 조회하여 패킷의 목적지가 로컬 시스템인지, 다른 호스트로 포워딩해야 하는지 결정합니다. ip_route_input_noref() 함수가 라우팅 테이블을 조회하고, 결과에 따라 로컬 수신(INPUT) 또는 포워딩(FORWARD) 경로로 분기합니다. 라우팅 결정 후에는 패킷의 목적지 인터페이스와 게이트웨이 정보가 skb에 설정됩니다.\n\nOSI 계층: L3 (Network Layer) 라우팅\n- IP 헤더의 목적지 IP 주소를 기반으로 라우팅 테이블 조회\n- FIB(Forwarding Information Base)에서 최적 경로 결정\n- 로컬 수신 vs 포워딩 결정\n- 다음 홉(next hop) 주소 및 출력 인터페이스 결정',
       functions: ['ip_route_input_noref()', 'ip_rcv_finish()'], 
       position: { x: 1500, y: -250 } 
     },
@@ -291,7 +291,7 @@ const networkData = {
       label: 'Socket', 
       level: 'SOCKET', 
       desc: 'User-space 전달',
-      detailedDesc: 'Socket은 커널과 사용자 공간 애플리케이션 사이의 인터페이스 역할을 하는 추상화 계층입니다. Socket 계층에서는 L4(전송 계층) 프로토콜(TCP/UDP/SCTP 등)에 따라 패킷을 처리합니다. TCP의 경우 tcp_v4_rcv()에서 패킷의 시퀀스 번호, 체크섬, 연결 상태를 검증하고, ESTABLISHED 상태의 연결에 대해서는 tcp_v4_do_rcv()를 호출하여 처리합니다. 패킷이 올바르게 처리되면 sock_queue_rcv_skb()를 통해 해당 소켓의 수신 큐(sk_receive_queue)에 추가됩니다. 패킷이 큐에 추가되면 sk_data_ready() 콜백을 호출하여 대기 중인 사용자 공간 프로세스를 깨웁니다(wakeup). Socket은 struct socket과 struct sock 구조체로 표현되며, 각 소켓은 고유한 파일 디스크립터와 연결됩니다. 사용자 공간의 recv(), read(), recvfrom() 등의 시스템 콜은 이 큐에서 데이터를 읽어갑니다. Socket은 또한 프로토콜별 특성(TCP의 신뢰성, 순서 보장, 흐름 제어, UDP의 비연결성 등)을 구현합니다.',
+      detailedDesc: 'Socket은 커널과 사용자 공간 애플리케이션 사이의 인터페이스 역할을 하는 추상화 계층입니다. Socket 계층에서는 L4(전송 계층) 프로토콜(TCP/UDP/SCTP 등)에 따라 패킷을 처리합니다. TCP의 경우 tcp_v4_rcv()에서 패킷의 시퀀스 번호, 체크섬, 연결 상태를 검증하고, ESTABLISHED 상태의 연결에 대해서는 tcp_v4_do_rcv()를 호출하여 처리합니다. 패킷이 올바르게 처리되면 sock_queue_rcv_skb()를 통해 해당 소켓의 수신 큐(sk_receive_queue)에 추가됩니다. 패킷이 큐에 추가되면 sk_data_ready() 콜백을 호출하여 대기 중인 사용자 공간 프로세스를 깨웁니다(wakeup). Socket은 struct socket과 struct sock 구조체로 표현되며, 각 소켓은 고유한 파일 디스크립터와 연결됩니다. 사용자 공간의 recv(), read(), recvfrom() 등의 시스템 콜은 이 큐에서 데이터를 읽어갑니다. Socket은 또한 프로토콜별 특성(TCP의 신뢰성, 순서 보장, 흐름 제어, UDP의 비연결성 등)을 구현합니다.\n\n중요: Socket과 프로세스의 연결\n\nSocket 구조체에는 애플리케이션 정보가 직접 저장되지 않습니다:\n- Socket은 파일 디스크립터를 통해 접근됩니다\n- struct socket과 struct sock에는 wait queue(sk->sk_wq)가 있습니다\n- 애플리케이션이 recv()/read()를 호출하면 wait queue에 현재 프로세스가 등록됩니다\n- 데이터 도착 시 wait queue에 등록된 프로세스들이 깨어납니다\n- 따라서 "어떤 애플리케이션"이라는 정보는 wait queue를 통해 동적으로 관리됩니다\n\nOSI 계층: L4 (Transport Layer) 처리\n- IP 헤더는 이미 처리된 상태 (L3 처리 완료)\n- TCP/UDP 헤더 처리: 포트 번호, 시퀀스 번호, 체크섬 등\n- TCP: 연결 상태 관리, 흐름 제어, 혼잡 제어\n- UDP: 비연결성 프로토콜 처리\n- 애플리케이션 데이터 추출 및 소켓 큐에 추가\n\n중요: 소켓 수신 버퍼 크기 제한\n\nTCP 소켓의 경우:\n- net.ipv4.tcp_rmem: TCP 전용 버퍼 크기 (min default max 3개 값)\n- net.core.rmem_max: 시스템 전체 소켓 수신 버퍼 최대값 (모든 프로토콜에 적용)\n- 실제 TCP 소켓 최대 버퍼 크기 = min(net.ipv4.tcp_rmem[2], net.core.rmem_max)\n- 즉, 두 값 중 작은 값이 최종 제한이 됩니다.\n\nUDP 소켓의 경우:\n- net.core.rmem_max만 적용됩니다.\n\n이 버퍼는 net.core.netdev_max_backlog와는 완전히 다른 단계의 버퍼입니다:\n- netdev_max_backlog: NIC → 커널로 들어온 "프로토콜 처리 전 패킷" 큐 (NAPI 단계, IP/TCP/UDP 스택 처리 이전)\n- rmem_max/tcp_rmem: 프로토콜 스택 처리 후, 애플리케이션 수신 전 버퍼 (소켓 단계, IP/TCP/UDP 스택 처리 이후)\n\n버퍼 경로: [NIC] → [netdev_max_backlog] → [IP/TCP/UDP Stack] → [Socket RX Queue (rmem_max/tcp_rmem)] → [Application]',
       functions: ['tcp_v4_rcv()', 'tcp_v4_do_rcv()', 'sock_queue_rcv_skb()', 'sk_data_ready()', 'inet_recvmsg()'], 
       position: { x: 1800, y: -250 } 
     },
@@ -300,25 +300,34 @@ const networkData = {
       label: 'TCP RX Buffer', 
       level: 'BUFFER', 
       desc: 'TCP 수신 버퍼',
-      detailedDesc: 'TCP 수신 버퍼는 TCP 프로토콜이 수신한 데이터를 저장하는 버퍼입니다. 순서가 맞지 않은 패킷을 재정렬하거나, 애플리케이션이 읽을 때까지 데이터를 보관합니다. 이 버퍼의 크기는 SO_RCVBUF 소켓 옵션으로 설정할 수 있으며, TCP 흐름 제어와 혼잡 제어에 중요한 역할을 합니다.',
+      detailedDesc: 'TCP 수신 버퍼는 TCP 프로토콜이 수신한 데이터를 저장하는 버퍼입니다. 순서가 맞지 않은 패킷을 재정렬하거나, 애플리케이션이 읽을 때까지 데이터를 보관합니다. 이 버퍼의 크기는 SO_RCVBUF 소켓 옵션으로 설정할 수 있으며, TCP 흐름 제어와 혼잡 제어에 중요한 역할을 합니다.\n\n중요: TCP 수신 버퍼 크기 제한\n\nTCP 소켓의 수신 버퍼 크기는 두 파라미터에 의해 제한됩니다:\n- net.ipv4.tcp_rmem: TCP 전용 버퍼 크기 (min default max 3개 값, 예: 4096 131072 6291456)\n- net.core.rmem_max: 시스템 전체 소켓 수신 버퍼 최대값 (모든 프로토콜에 적용)\n\n실제 TCP 소켓 최대 버퍼 크기 = min(net.ipv4.tcp_rmem[2], net.core.rmem_max)\n\n예시:\n- net.ipv4.tcp_rmem = 4096 131072 6291456 (max = 6291456 = 약 6MB)\n- net.core.rmem_max = 212992 (약 208KB)\n- 실제 최대값 = min(6291456, 212992) = 212992\n\n따라서 TCP 버퍼를 늘리려면 두 값을 모두 적절히 설정해야 합니다.\n\n이 버퍼는 net.core.netdev_max_backlog와는 완전히 다른 단계의 버퍼입니다:\n- netdev_max_backlog: NIC → 커널로 들어온 "프로토콜 처리 전 패킷" 큐 (NAPI 단계)\n- tcp_rmem/rmem_max: 프로토콜 스택 처리 후, 애플리케이션 수신 전 버퍼 (소켓 단계)\n\n버퍼 경로: [NIC] → [netdev_max_backlog] → [IP/TCP/UDP Stack] → [TCP RX Buffer (tcp_rmem/rmem_max)] → [Application]\n\n버퍼가 너무 작으면 TCP 흐름 제어로 인한 전송 속도 제한이 발생하고, 대역폭 활용도가 감소합니다.',
       functions: ['tcp_rcv_established()', 'tcp_data_queue()'], 
-      position: { x: 1800, y: -200 } 
+      position: { x: 1800, y: -150 } 
     },
     { 
       id: 'socket-rx-queue', 
       label: 'Socket RX Queue', 
       level: 'BUFFER', 
       desc: '소켓 수신 큐',
-      detailedDesc: '소켓의 수신 큐(sk_receive_queue)는 커널에서 사용자 공간으로 전달될 패킷을 저장하는 큐입니다. TCP/UDP 등 프로토콜 계층에서 처리된 패킷이 이 큐에 추가되고, 사용자 공간의 recv(), read() 등의 시스템 콜이 이 큐에서 데이터를 읽어갑니다. 큐가 비어있으면 프로세스가 블로킹되고, 데이터가 도착하면 wakeup 신호를 받아 깨어납니다.',
+      detailedDesc: '소켓의 수신 큐(sk_receive_queue)는 커널에서 사용자 공간으로 전달될 패킷을 저장하는 큐입니다. TCP/UDP 등 프로토콜 계층에서 처리된 패킷이 이 큐에 추가되고, 사용자 공간의 recv(), read() 등의 시스템 콜이 이 큐에서 데이터를 읽어갑니다. 큐가 비어있으면 프로세스가 블로킹되고, 데이터가 도착하면 sk_data_ready() 콜백을 통해 wait queue에 등록된 프로세스에게 wakeup 신호가 전송됩니다.\n\n중요: 소켓 수신 큐 크기 제한\n\nTCP 소켓의 경우:\n- net.ipv4.tcp_rmem: TCP 전용 버퍼 크기 (min default max 3개 값)\n- net.core.rmem_max: 시스템 전체 소켓 수신 버퍼 최대값\n- 실제 최대값 = min(net.ipv4.tcp_rmem[2], net.core.rmem_max)\n\nUDP 소켓의 경우:\n- net.core.rmem_max만 적용됩니다.\n\n이 큐는 net.core.netdev_max_backlog와는 완전히 다른 단계의 버퍼입니다:\n- netdev_max_backlog: NIC → 커널로 들어온 "프로토콜 처리 전 패킷" 큐 (NAPI 단계, IP/TCP/UDP 스택 처리 이전)\n- tcp_rmem/rmem_max: 프로토콜 스택 처리 후, 애플리케이션 수신 전 버퍼 (소켓 단계, IP/TCP/UDP 스택 처리 이후)\n\n버퍼 경로: [NIC] → [netdev_max_backlog] → [IP/TCP/UDP Stack] → [Socket RX Queue (tcp_rmem/rmem_max)] → [Wait Queue] → [Application]\n\n두 버퍼는 서로 다른 단계에 위치하며 역할이 겹치지 않습니다. 하나만 키워서는 전체 성능 개선이 안 될 수 있으므로, 두 값 모두 적절히 설정해야 합니다.',
       functions: ['sock_queue_rcv_skb()', 'skb_queue_tail()', 'sk_data_ready()'], 
       position: { x: 1950, y: -250 } 
+    },
+    { 
+      id: 'wait-queue-rx', 
+      label: 'Wait Queue', 
+      level: 'BUFFER', 
+      desc: '프로세스 대기 큐',
+      detailedDesc: 'Wait Queue(sk->sk_wq 또는 socket->wq)는 소켓에서 데이터를 읽기 위해 대기 중인 프로세스들을 관리하는 큐입니다. Socket 구조체에는 애플리케이션 정보가 직접 저장되지 않고, wait queue를 통해 "현재 이 socket을 읽기 위해 대기 중인 프로세스"가 동적으로 관리됩니다.\n\n동작 메커니즘:\n\n1. 애플리케이션이 recv(), read(), recvfrom() 등을 호출하면:\n   - 해당 socket의 wait queue에 현재 프로세스가 등록됩니다\n   - wait_queue_entry 구조체에 프로세스 정보(task_struct)가 저장됩니다\n   - Socket RX Queue가 비어있으면 프로세스가 블로킹 상태(TASK_INTERRUPTIBLE)로 전환됩니다\n   - 프로세스는 스케줄러에 의해 CPU에서 제거되고 대기 상태로 들어갑니다\n\n2. 데이터가 Socket RX Queue에 도착하면:\n   - sock_queue_rcv_skb()로 패킷이 큐에 추가됩니다\n   - sk_data_ready() 콜백이 호출됩니다\n   - sk_data_ready()는 wait queue에 등록된 모든 프로세스에게 wakeup 신호를 전송합니다\n   - wake_up_interruptible() 또는 wake_up() 함수가 호출되어 프로세스를 깨웁니다\n   - 깨어난 프로세스는 스케줄러에 의해 다시 실행 가능 상태로 전환됩니다\n\n3. Socket과 프로세스의 연결:\n   - Socket은 파일 디스크립터를 통해 접근됩니다\n   - 파일 디스크립터를 소유한 프로세스가 wait queue에 등록됩니다\n   - 여러 프로세스가 같은 socket을 사용할 수 있지만, 일반적으로 하나의 프로세스만 읽기 대기합니다\n   - wait queue는 struct wait_queue_head 구조체로 표현됩니다\n\n4. Wait Queue의 구조:\n   - wait_queue_head: wait queue의 헤드\n   - wait_queue_entry: 각 대기 중인 프로세스의 엔트리\n   - 각 엔트리는 프로세스(task_struct)와 wakeup 콜백 함수를 포함합니다\n\n중요한 특징:\n- Socket 구조체에는 "어떤 애플리케이션"이라는 정보가 직접 저장되지 않습니다\n- Wait queue를 통해 동적으로 관리되므로, 프로세스가 recv()를 호출할 때마다 등록되고, 데이터를 읽으면 제거됩니다\n- 여러 프로세스가 동시에 같은 socket을 읽으려고 하면 모두 wait queue에 등록될 수 있습니다\n- 데이터 도착 시 wait queue에 등록된 모든 프로세스가 깨어나지만, 실제로 데이터를 읽는 것은 하나의 프로세스입니다',
+      functions: ['sk_data_ready()', 'wake_up_interruptible()', 'wake_up()', 'wait_event_interruptible()'], 
+      position: { x: 2025, y: -150 } 
     },
     { 
       id: 'user-rx', 
       label: 'User Application', 
       level: 'USER', 
       desc: '사용자 공간 애플리케이션 (RX)',
-      detailedDesc: '사용자 공간 애플리케이션이 recv(), read(), recvfrom() 등의 시스템 콜을 호출하여 소켓에서 데이터를 수신합니다. 커널의 소켓 수신 큐에서 데이터를 읽어와 애플리케이션 버퍼로 복사합니다. 큐가 비어있으면 프로세스가 블로킹되고, 데이터가 도착하면 wakeup 신호를 받아 깨어나 데이터를 읽어갑니다.',
+      detailedDesc: '사용자 공간 애플리케이션이 recv(), read(), recvfrom() 등의 시스템 콜을 호출하여 소켓에서 데이터를 수신합니다. 커널의 소켓 수신 큐에서 데이터를 읽어와 애플리케이션 버퍼로 복사합니다. 큐가 비어있으면 프로세스가 블로킹되고, wait queue에 등록됩니다. 데이터가 도착하면 wait queue를 통해 wakeup 신호를 받아 깨어나 데이터를 읽어갑니다.',
       functions: ['recv()', 'read()', 'recvfrom()'], 
       position: { x: 2100, y: -250 } 
     },
@@ -329,7 +338,7 @@ const networkData = {
       label: 'PREROUTING', 
       level: 'NETFILTER', 
       desc: '라우팅 전 처리',
-      detailedDesc: 'PREROUTING hook은 라우팅 결정 이전에 실행되는 첫 번째 Netfilter hook입니다. 여기서 주로 DNAT(Destination NAT)와 conntrack(연결 추적)이 시작됩니다. 패킷의 목적지 주소를 변경하거나, 연결 추적 테이블에 연결 정보를 기록합니다. 이 hook은 모든 들어오는 패킷에 대해 실행되며, NF_INET_PRE_ROUTING hook point에서 처리됩니다.\n\n역할:\n- DNAT(Destination NAT): 패킷의 목적지 IP 주소를 변경합니다. 예를 들어, 외부에서 들어온 패킷의 목적지를 내부 서버로 변경할 수 있습니다.\n- 연결 추적 시작: conntrack이 패킷을 분석하여 연결 상태를 추적하기 시작합니다.\n- 패킷 mangling: TOS(Type of Service) 필드 변경 등 패킷 헤더 수정이 가능합니다.\n\n동작 방식:\n1. 패킷이 NIC에서 들어와 IP 계층에 도달한 직후 실행됩니다.\n2. 라우팅 결정 전이므로 목적지 주소를 변경할 수 있습니다.\n3. iptables의 PREROUTING 체인 규칙이 여기서 실행됩니다.\n4. DNAT 규칙이 적용되면 패킷의 목적지 IP가 변경되고, 이후 라우팅 결정에 영향을 줍니다.\n5. conntrack은 패킷을 분석하여 연결 상태(ESTABLISHED, NEW, RELATED 등)를 결정합니다.',
+      detailedDesc: 'PREROUTING hook은 라우팅 결정 이전에 실행되는 첫 번째 Netfilter hook입니다. 여기서 주로 DNAT(Destination NAT)와 conntrack(연결 추적)이 시작됩니다. 패킷의 목적지 주소를 변경하거나, 연결 추적 테이블에 연결 정보를 기록합니다. 이 hook은 모든 들어오는 패킷에 대해 실행되며, NF_INET_PRE_ROUTING hook point에서 처리됩니다.\n\nOSI 계층: L3 (Network Layer) 처리 시작\n- ip_rcv() 함수에서 IP 헤더 처리 후 실행\n- IP 패킷의 헤더 정보(소스 IP, 목적지 IP, 프로토콜 등)를 기반으로 처리\n- Ethernet 헤더는 이미 제거된 상태\n\n역할:\n- DNAT(Destination NAT): 패킷의 목적지 IP 주소를 변경합니다. 예를 들어, 외부에서 들어온 패킷의 목적지를 내부 서버로 변경할 수 있습니다.\n- 연결 추적 시작: conntrack이 패킷을 분석하여 연결 상태를 추적하기 시작합니다.\n- 패킷 mangling: TOS(Type of Service) 필드 변경 등 패킷 헤더 수정이 가능합니다.\n\n동작 방식:\n1. 패킷이 NIC에서 들어와 IP 계층에 도달한 직후 실행됩니다.\n2. 라우팅 결정 전이므로 목적지 주소를 변경할 수 있습니다.\n3. iptables의 PREROUTING 체인 규칙이 여기서 실행됩니다.\n4. DNAT 규칙이 적용되면 패킷의 목적지 IP가 변경되고, 이후 라우팅 결정에 영향을 줍니다.\n5. conntrack은 패킷을 분석하여 연결 상태(ESTABLISHED, NEW, RELATED 등)를 결정합니다.',
       functions: ['nf_hook_slow()', 'ipv4_conntrack_in()'], 
       parent: 'netfilter-rx', 
       position: { x: 1200, y: -350 } 
@@ -339,7 +348,7 @@ const networkData = {
       label: 'INPUT', 
       level: 'NETFILTER', 
       desc: '로컬 목적지 처리',
-      detailedDesc: 'INPUT hook은 로컬 시스템으로 향하는 패킷에 대해서만 실행됩니다. 라우팅 결정 후 패킷의 목적지가 로컬인 경우, 이 hook에서 패킷 필터링 규칙을 적용합니다. 방화벽 규칙, 로깅, 패킷 드롭 등의 작업이 여기서 수행됩니다. NF_INET_LOCAL_IN hook point에서 처리되며, ip_local_deliver() 함수가 이 hook을 호출합니다.\n\n역할:\n- 로컬 수신 패킷 필터링: 로컬 시스템으로 들어오는 패킷에 대한 방화벽 규칙을 적용합니다.\n- 보안 정책 적용: 허용되지 않은 패킷을 DROP하거나 REJECT합니다.\n- 로깅: 패킷을 로그에 기록하여 보안 감사나 디버깅에 사용합니다.\n- 연결 추적 활용: conntrack의 연결 상태를 기반으로 상태 기반 방화벽 규칙을 적용할 수 있습니다.\n\n동작 방식:\n1. 라우팅 결정 후 패킷의 목적지가 로컬 시스템인 경우에만 실행됩니다.\n2. iptables의 INPUT 체인 규칙이 순차적으로 검사됩니다.\n3. 규칙이 매칭되면 해당 액션(ACCEPT, DROP, REJECT 등)이 수행됩니다.\n4. ACCEPT되면 패킷은 상위 계층(TCP/UDP)으로 전달됩니다.\n5. DROP되면 패킷이 조용히 폐기되고, REJECT되면 ICMP 에러 패킷이 전송됩니다.\n6. 상태 기반 규칙(-m state, -m conntrack)을 사용하면 ESTABLISHED 연결의 응답 패킷을 자동으로 허용할 수 있습니다.',
+      detailedDesc: 'INPUT hook은 로컬 시스템으로 향하는 패킷에 대해서만 실행됩니다. 라우팅 결정 후 패킷의 목적지가 로컬인 경우, 이 hook에서 패킷 필터링 규칙을 적용합니다. 방화벽 규칙, 로깅, 패킷 드롭 등의 작업이 여기서 수행됩니다. NF_INET_LOCAL_IN hook point에서 처리되며, ip_local_deliver() 함수가 이 hook을 호출합니다.\n\nOSI 계층: L3 (Network Layer) 필터링\n- IP 패킷의 헤더 정보를 기반으로 필터링\n- 소스 IP, 목적지 IP, 프로토콜(TCP/UDP/ICMP), 포트 번호 등을 검사\n- 로컬 수신 패킷에 대한 방화벽 규칙 적용\n\n역할:\n- 로컬 수신 패킷 필터링: 로컬 시스템으로 들어오는 패킷에 대한 방화벽 규칙을 적용합니다.\n- 보안 정책 적용: 허용되지 않은 패킷을 DROP하거나 REJECT합니다.\n- 로깅: 패킷을 로그에 기록하여 보안 감사나 디버깅에 사용합니다.\n- 연결 추적 활용: conntrack의 연결 상태를 기반으로 상태 기반 방화벽 규칙을 적용할 수 있습니다.\n\n동작 방식:\n1. 라우팅 결정 후 패킷의 목적지가 로컬 시스템인 경우에만 실행됩니다.\n2. iptables의 INPUT 체인 규칙이 순차적으로 검사됩니다.\n3. 규칙이 매칭되면 해당 액션(ACCEPT, DROP, REJECT 등)이 수행됩니다.\n4. ACCEPT되면 패킷은 상위 계층(TCP/UDP, L4)으로 전달됩니다.\n5. DROP되면 패킷이 조용히 폐기되고, REJECT되면 ICMP 에러 패킷이 전송됩니다.\n6. 상태 기반 규칙(-m state, -m conntrack)을 사용하면 ESTABLISHED 연결의 응답 패킷을 자동으로 허용할 수 있습니다.',
       functions: ['ip_local_deliver()', 'nf_hook()'], 
       parent: 'netfilter-rx', 
       position: { x: 1350, y: -350 } 
@@ -349,7 +358,7 @@ const networkData = {
       label: 'FORWARD', 
       level: 'NETFILTER', 
       desc: '포워딩 처리',
-      detailedDesc: 'FORWARD hook은 라우터 역할을 하는 시스템에서, 한 인터페이스로 들어온 패킷을 다른 인터페이스로 전달할 때 실행됩니다. 로컬 시스템이 목적지가 아닌 패킷에 대해 포워딩 규칙을 적용합니다. 이 hook에서도 패킷 필터링, 로깅 등이 수행됩니다. NF_INET_FORWARD hook point에서 처리되며, ip_forward() 함수가 이 hook을 호출합니다.\n\n역할:\n- 라우터 패킷 필터링: 한 네트워크에서 다른 네트워크로 전달되는 패킷에 대한 방화벽 규칙을 적용합니다.\n- 네트워크 간 보안 정책: 내부 네트워크와 외부 네트워크 간 트래픽을 제어합니다.\n- 포워딩 제어: 특정 패킷의 포워딩을 허용하거나 차단할 수 있습니다.\n\n동작 방식:\n1. 라우팅 결정 후 패킷의 목적지가 다른 호스트인 경우에만 실행됩니다.\n2. ip_forward = 1로 설정되어 있어야 포워딩이 가능합니다.\n3. iptables의 FORWARD 체인 규칙이 순차적으로 검사됩니다.\n4. ACCEPT되면 패킷이 출력 인터페이스로 전달됩니다.\n5. DROP되면 패킷이 폐기되어 전달되지 않습니다.\n6. NAT와 함께 사용하면 포트 포워딩이나 라우터의 방화벽 역할을 수행할 수 있습니다.\n7. 일반적으로 로컬 시스템이 라우터나 게이트웨이 역할을 할 때 사용됩니다.',
+      detailedDesc: 'FORWARD hook은 라우터 역할을 하는 시스템에서, 한 인터페이스로 들어온 패킷을 다른 인터페이스로 전달할 때 실행됩니다. 로컬 시스템이 목적지가 아닌 패킷에 대해 포워딩 규칙을 적용합니다. 이 hook에서도 패킷 필터링, 로깅 등이 수행됩니다. NF_INET_FORWARD hook point에서 처리되며, ip_forward() 함수가 이 hook을 호출합니다.\n\nOSI 계층: L3 (Network Layer) 포워딩 필터링\n- IP 패킷의 헤더 정보를 기반으로 포워딩 필터링\n- 한 네트워크에서 다른 네트워크로 전달되는 패킷에 대한 방화벽 규칙 적용\n- 포워딩 전 패킷 검사 및 제어\n\n역할:\n- 라우터 패킷 필터링: 한 네트워크에서 다른 네트워크로 전달되는 패킷에 대한 방화벽 규칙을 적용합니다.\n- 네트워크 간 보안 정책: 내부 네트워크와 외부 네트워크 간 트래픽을 제어합니다.\n- 포워딩 제어: 특정 패킷의 포워딩을 허용하거나 차단할 수 있습니다.\n\n동작 방식:\n1. 라우팅 결정 후 패킷의 목적지가 다른 호스트인 경우에만 실행됩니다.\n2. ip_forward = 1로 설정되어 있어야 포워딩이 가능합니다.\n3. iptables의 FORWARD 체인 규칙이 순차적으로 검사됩니다.\n4. ACCEPT되면 패킷이 출력 인터페이스로 전달됩니다.\n5. DROP되면 패킷이 폐기되어 전달되지 않습니다.\n6. NAT와 함께 사용하면 포트 포워딩이나 라우터의 방화벽 역할을 수행할 수 있습니다.\n7. 일반적으로 로컬 시스템이 라우터나 게이트웨이 역할을 할 때 사용됩니다.',
       functions: ['ip_forward()', 'nf_hook()'], 
       parent: 'netfilter-rx', 
       position: { x: 1200, y: -150 } 
@@ -361,17 +370,26 @@ const networkData = {
       label: 'User Application', 
       level: 'USER', 
       desc: '사용자 공간 애플리케이션 (TX)',
-      detailedDesc: '사용자 공간 애플리케이션이 send(), sendto(), write() 등의 시스템 콜을 호출하여 네트워크로 데이터를 전송합니다. 애플리케이션 버퍼의 데이터가 커널 공간으로 복사되고, 소켓의 송신 큐에 추가됩니다. 큐가 가득 차면 프로세스가 블로킹될 수 있습니다.',
+      detailedDesc: '사용자 공간 애플리케이션이 send(), sendto(), write() 등의 시스템 콜을 호출하여 네트워크로 데이터를 전송합니다. 애플리케이션 버퍼의 데이터가 커널 공간으로 복사되고, 소켓의 송신 큐에 추가됩니다. Socket TX Queue가 가득 차면 프로세스가 블로킹되고, wait queue에 등록됩니다. 데이터가 전송되어 큐에 공간이 생기면 wait queue를 통해 wakeup 신호를 받아 깨어나 데이터를 전송합니다.',
       functions: ['send()', 'sendto()', 'write()'], 
       position: { x: -300, y: 250 } 
+    },
+    { 
+      id: 'wait-queue-tx', 
+      label: 'Wait Queue', 
+      level: 'BUFFER', 
+      desc: '프로세스 대기 큐 (TX)',
+      detailedDesc: 'Wait Queue(sk->sk_wq 또는 socket->wq)는 소켓에 데이터를 쓰기 위해 대기 중인 프로세스들을 관리하는 큐입니다. TX 경로에서도 RX 경로와 동일하게 wait queue를 사용하여 프로세스를 관리합니다.\n\n동작 메커니즘:\n\n1. 애플리케이션이 send(), sendto(), write() 등을 호출하면:\n   - 해당 socket의 wait queue에 현재 프로세스가 등록됩니다\n   - wait_queue_entry 구조체에 프로세스 정보(task_struct)가 저장됩니다\n   - Socket TX Queue가 가득 차면 프로세스가 블로킹 상태(TASK_INTERRUPTIBLE)로 전환됩니다\n   - 프로세스는 스케줄러에 의해 CPU에서 제거되고 대기 상태로 들어갑니다\n\n2. 데이터가 전송되어 Socket TX Queue에 공간이 생기면:\n   - tcp_write_space() 또는 sk_write_space() 콜백이 호출됩니다\n   - 이 콜백은 wait queue에 등록된 모든 프로세스에게 wakeup 신호를 전송합니다\n   - wake_up_interruptible() 또는 wake_up() 함수가 호출되어 프로세스를 깨웁니다\n   - 깨어난 프로세스는 스케줄러에 의해 다시 실행 가능 상태로 전환됩니다\n   - 프로세스가 깨어나면 다시 send()를 시도하여 데이터를 큐에 추가할 수 있습니다\n\n3. Socket과 프로세스의 연결:\n   - Socket은 파일 디스크립터를 통해 접근됩니다\n   - 파일 디스크립터를 소유한 프로세스가 wait queue에 등록됩니다\n   - 여러 프로세스가 같은 socket을 사용할 수 있지만, 일반적으로 하나의 프로세스만 쓰기 대기합니다\n   - wait queue는 struct wait_queue_head 구조체로 표현됩니다\n\n4. TX 경로의 특성:\n   - TCP의 경우 흐름 제어와 혼잡 제어로 인해 전송 속도가 제한될 수 있습니다\n   - 송신 버퍼(wmem_max, tcp_wmem)가 가득 차면 블로킹됩니다\n   - 논블로킹 모드(SO_NONBLOCK)로 설정하면 블로킹되지 않고 EAGAIN/EWOULDBLOCK을 반환합니다\n\n중요한 특징:\n- Socket 구조체에는 "어떤 애플리케이션"이라는 정보가 직접 저장되지 않습니다\n- Wait queue를 통해 동적으로 관리되므로, 프로세스가 send()를 호출할 때마다 등록되고, 데이터를 전송하면 제거됩니다\n- 여러 프로세스가 동시에 같은 socket에 쓰려고 하면 모두 wait queue에 등록될 수 있습니다\n- 큐에 공간이 생기면 wait queue에 등록된 모든 프로세스가 깨어나지만, 실제로 데이터를 쓰는 것은 하나의 프로세스입니다',
+      functions: ['sk_write_space()', 'tcp_write_space()', 'wake_up_interruptible()', 'wake_up()', 'wait_event_interruptible()'], 
+      position: { x: -225, y: 350 } 
     },
     { 
       id: 'socket-tx-queue', 
       label: 'Socket TX Queue', 
       level: 'BUFFER', 
       desc: '소켓 송신 큐',
-      detailedDesc: '소켓의 송신 큐(sk_write_queue)는 사용자 공간에서 전송 요청된 데이터를 저장하는 큐입니다. send(), sendto() 등의 시스템 콜로 전달된 데이터가 이 큐에 추가되고, TCP/IP 계층에서 순차적으로 처리됩니다. 큐가 가득 차면 프로세스가 블로킹될 수 있습니다.',
-      functions: ['sock_alloc_send_skb()', 'skb_queue_tail()'], 
+      detailedDesc: '소켓의 송신 큐(sk_write_queue)는 사용자 공간에서 전송 요청된 데이터를 저장하는 큐입니다. send(), sendto() 등의 시스템 콜로 전달된 데이터가 이 큐에 추가되고, TCP/IP 계층에서 순차적으로 처리됩니다.\n\n중요: TCP와 UDP의 차이\n\nTCP의 경우:\n- tcp_sendmsg()에서 데이터를 TCP 송신 버퍼에 저장합니다\n- TCP 송신 버퍼는 애플리케이션 데이터를 저장하는 버퍼입니다\n- tcp_write_xmit()에서 전송 가능한 TCP 세그먼트를 생성하여 전송 대기 큐에 추가합니다\n- sk_write_queue는 전송 대기 중인 TCP 세그먼트(skb)들을 저장하는 큐입니다\n- 흐름 제어와 혼잡 제어로 인해 전송 속도가 제한될 수 있어, 큐에 세그먼트가 쌓일 수 있습니다\n\nUDP의 경우:\n- udp_sendmsg()에서 UDP 헤더를 추가하고 바로 IP 계층으로 전달합니다\n- UDP는 비연결성 프로토콜이므로 큐에 저장되는 시간이 매우 짧거나 즉시 전달됩니다\n- 일반적으로 큐가 가득 차는 경우는 드뭅니다\n\n블로킹 및 Wakeup 메커니즘:\n- 큐가 가득 차면(또는 TCP의 경우 송신 버퍼가 가득 차면) 프로세스가 블로킹되고, wait queue에 등록됩니다\n- 데이터가 전송되어 큐에 공간이 생기면(또는 TCP의 경우 송신 버퍼에 공간이 생기면) sk_write_space() 또는 tcp_write_space() 콜백이 호출됩니다\n- 이 콜백을 통해 wait queue에 등록된 프로세스에게 wakeup 신호가 전송됩니다\n- 깨어난 프로세스는 다시 send()를 시도하여 데이터를 전송할 수 있습니다',
+      functions: ['sock_alloc_send_skb()', 'skb_queue_tail()', 'sk_write_space()'], 
       position: { x: -150, y: 250 } 
     },
     { 
@@ -388,7 +406,7 @@ const networkData = {
       label: 'TCP/IP', 
       level: 'SOCKET', 
       desc: 'TCP/IP 처리',
-      detailedDesc: 'TCP 계층에서는 tcp_sendmsg()가 호출되어 데이터를 TCP 세그먼트로 분할합니다. TCP 헤더를 추가하고, 흐름 제어, 혼잡 제어 알고리즘을 적용합니다. 그 후 IP 계층으로 전달하기 위해 ip_queue_xmit()을 호출합니다. 여기서 IP 헤더가 추가되고, 필요시 IP fragmentation이 수행됩니다.',
+      detailedDesc: 'TCP 계층에서는 tcp_sendmsg()가 호출되어 데이터를 TCP 세그먼트로 분할합니다. TCP 헤더를 추가하고, 흐름 제어, 혼잡 제어 알고리즘을 적용합니다. 그 후 IP 계층으로 전달하기 위해 ip_queue_xmit()을 호출합니다. 여기서 IP 헤더가 추가되고, 필요시 IP fragmentation이 수행됩니다.\n\nOSI 계층: L4 (Transport Layer) → L3 (Network Layer)\n- L4 처리: TCP 헤더 추가 (포트 번호, 시퀀스 번호, 체크섬 등)\n- L3 처리: IP 헤더 추가 (소스 IP, 목적지 IP, 프로토콜 타입 등)\n- IP fragmentation: 큰 패킷을 MTU 크기에 맞게 분할',
       functions: ['tcp_sendmsg()', 'tcp_push()', 'ip_queue_xmit()'], 
       position: { x: 300, y: 250 } 
     },
@@ -406,7 +424,7 @@ const networkData = {
       label: 'Netfilter OUTPUT', 
       level: 'NETFILTER', 
       desc: '출력 전 필터링',
-      detailedDesc: 'OUTPUT hook은 로컬 시스템에서 생성된 패킷이 네트워크로 나가기 전에 실행됩니다. 여기서 SNAT(Source NAT)의 일부와 방화벽 규칙이 적용됩니다. 로컬에서 생성된 패킷에 대한 필터링과 NAT 변환이 수행됩니다. NF_INET_LOCAL_OUT hook point에서 처리되며, ip_local_out() 함수가 이 hook을 호출합니다.\n\n역할:\n- 로컬 송신 패킷 필터링: 로컬 시스템에서 나가는 패킷에 대한 방화벽 규칙을 적용합니다.\n- 송신 보안 정책: 특정 목적지나 포트로의 연결을 차단할 수 있습니다.\n- SNAT 초기 단계: 일부 SNAT 작업이 여기서 수행될 수 있습니다.\n- 로깅: 나가는 패킷을 로그에 기록합니다.\n\n동작 방식:\n1. 로컬 애플리케이션이 패킷을 생성하여 네트워크 스택으로 전달한 후, 라우팅 결정 전에 실행됩니다.\n2. iptables의 OUTPUT 체인 규칙이 순차적으로 검사됩니다.\n3. 규칙이 매칭되면 해당 액션(ACCEPT, DROP, REJECT 등)이 수행됩니다.\n4. ACCEPT되면 패킷은 라우팅 결정을 거쳐 POSTROUTING으로 전달됩니다.\n5. DROP되면 패킷이 폐기되어 전송되지 않습니다.\n6. 상태 기반 규칙을 사용하면 ESTABLISHED 연결의 응답 패킷을 자동으로 허용할 수 있습니다.\n7. 예를 들어, 특정 웹사이트로의 접근을 차단하거나, 특정 포트로의 연결을 제한할 수 있습니다.',
+      detailedDesc: 'OUTPUT hook은 로컬 시스템에서 생성된 패킷이 네트워크로 나가기 전에 실행됩니다. 여기서 SNAT(Source NAT)의 일부와 방화벽 규칙이 적용됩니다. 로컬에서 생성된 패킷에 대한 필터링과 NAT 변환이 수행됩니다. NF_INET_LOCAL_OUT hook point에서 처리되며, ip_local_out() 함수가 이 hook을 호출합니다.\n\n중요: 노드 구조 설명\n- 이 노드는 Netfilter OUTPUT hook을 나타내는 메인 노드입니다\n- "OUTPUT" 노드(nf:output)는 이 노드의 세부 노드입니다\n- 두 노드는 같은 OUTPUT hook을 나타내지만, 계층 구조로 표현되어 있습니다\n- Zoom-In 시 세부 노드가 표시됩니다\n\nOSI 계층: L3 (Network Layer) 필터링\n- IP 헤더가 이미 추가된 상태\n- 로컬에서 생성된 IP 패킷에 대한 방화벽 규칙 적용\n- 소스 IP, 목적지 IP, 프로토콜, 포트 번호 등을 기반으로 필터링\n\n역할:\n- 로컬 송신 패킷 필터링: 로컬 시스템에서 나가는 패킷에 대한 방화벽 규칙을 적용합니다.\n- 송신 보안 정책: 특정 목적지나 포트로의 연결을 차단할 수 있습니다.\n- SNAT 초기 단계: 일부 SNAT 작업이 여기서 수행될 수 있습니다.\n- 로깅: 나가는 패킷을 로그에 기록합니다.\n\n동작 방식:\n1. 로컬 애플리케이션이 패킷을 생성하여 네트워크 스택으로 전달한 후, 라우팅 결정 전에 실행됩니다.\n2. iptables의 OUTPUT 체인 규칙이 순차적으로 검사됩니다.\n3. 규칙이 매칭되면 해당 액션(ACCEPT, DROP, REJECT 등)이 수행됩니다.\n4. ACCEPT되면 패킷은 라우팅 결정을 거쳐 POSTROUTING으로 전달됩니다.\n5. DROP되면 패킷이 폐기되어 전송되지 않습니다.\n6. 상태 기반 규칙을 사용하면 ESTABLISHED 연결의 응답 패킷을 자동으로 허용할 수 있습니다.\n7. 예를 들어, 특정 웹사이트로의 접근을 차단하거나, 특정 포트로의 연결을 제한할 수 있습니다.',
       functions: ['nf_hook()', 'ipv4_conntrack_local()', 'ip_local_out()'], 
       position: { x: 600, y: 250 } 
     },
@@ -415,7 +433,7 @@ const networkData = {
       label: 'Routing', 
       level: 'ROUTING', 
       desc: '출력 라우팅',
-      detailedDesc: '출력 라우팅에서는 ip_route_output_flow() 함수가 호출되어 패킷의 목적지에 대한 최적의 경로를 결정합니다. 라우팅 테이블을 조회하여 다음 홉(next hop) 주소와 출력 인터페이스를 결정합니다. 이 정보는 skb에 저장되어 이후 단계에서 사용됩니다.',
+      detailedDesc: '출력 라우팅에서는 ip_route_output_flow() 함수가 호출되어 패킷의 목적지에 대한 최적의 경로를 결정합니다. 라우팅 테이블을 조회하여 다음 홉(next hop) 주소와 출력 인터페이스를 결정합니다. 이 정보는 skb에 저장되어 이후 단계에서 사용됩니다.\n\nOSI 계층: L3 (Network Layer) 라우팅\n- IP 헤더의 목적지 IP 주소를 기반으로 라우팅 테이블 조회\n- 출력 경로 결정: 다음 홉 주소, 출력 인터페이스\n- 라우팅 결정 후 POSTROUTING hook으로 전달',
       functions: ['ip_route_output_flow()'], 
       position: { x: 900, y: 250 } 
     },
@@ -424,7 +442,7 @@ const networkData = {
       label: 'Netfilter POSTROUTING', 
       level: 'NETFILTER', 
       desc: '라우팅 후 처리',
-      detailedDesc: 'POSTROUTING hook은 라우팅 결정 후, 패킷이 실제로 네트워크 인터페이스로 전송되기 직전에 실행되는 마지막 Netfilter hook입니다. 여기서 SNAT(Source NAT)의 최종 단계가 수행되고, 패킷의 소스 주소가 변경됩니다. 또한 마지막 방화벽 체크와 패킷 mangling이 수행됩니다. NF_INET_POST_ROUTING hook point에서 처리됩니다.\n\n역할:\n- SNAT(Source NAT): 패킷의 소스 IP 주소를 변경합니다. MASQUERADE는 동적 IP 환경에서 사용되는 SNAT의 특수 형태입니다.\n- 최종 패킷 수정: 라우팅 결정 후이므로 출력 인터페이스를 알 수 있어, 해당 인터페이스의 IP로 소스 주소를 변경할 수 있습니다.\n- 패킷 mangling: TTL(Time To Live) 변경, TOS 필드 수정 등이 가능합니다.\n- 마지막 필터링: 전송 직전 마지막 보안 체크를 수행할 수 있습니다.\n\n동작 방식:\n1. 라우팅 결정이 완료된 후, 출력 인터페이스가 결정된 상태에서 실행됩니다.\n2. iptables의 POSTROUTING 체인 규칙이 순차적으로 검사됩니다.\n3. SNAT 규칙이 적용되면 패킷의 소스 IP 주소가 변경됩니다.\n4. MASQUERADE는 동적 IP 환경에서 자동으로 출력 인터페이스의 IP를 소스로 사용합니다.\n5. NAT 테이블에 연결 정보가 기록되어, 응답 패킷이 올바르게 역변환됩니다.\n6. 패킷이 드라이버로 전달되어 실제 네트워크로 전송됩니다.\n7. 예를 들어, 내부 네트워크(192.168.1.0/24)의 패킷이 외부로 나갈 때 소스 IP를 공인 IP로 변경하는 것이 여기서 수행됩니다.',
+      detailedDesc: 'POSTROUTING hook은 라우팅 결정 후, 패킷이 실제로 네트워크 인터페이스로 전송되기 직전에 실행되는 마지막 Netfilter hook입니다. 여기서 SNAT(Source NAT)의 최종 단계가 수행되고, 패킷의 소스 주소가 변경됩니다. 또한 마지막 방화벽 체크와 패킷 mangling이 수행됩니다. NF_INET_POST_ROUTING hook point에서 처리됩니다.\n\nOSI 계층: L3 (Network Layer) 최종 처리\n- IP 헤더 수정: SNAT로 소스 IP 주소 변경\n- 라우팅 결정이 완료된 상태이므로 출력 인터페이스 정보 활용 가능\n- 패킷 mangling: TTL, TOS 필드 수정 등\n- L3 처리 완료 후 L2 계층(드라이버)으로 전달\n\n역할:\n- SNAT(Source NAT): 패킷의 소스 IP 주소를 변경합니다. MASQUERADE는 동적 IP 환경에서 사용되는 SNAT의 특수 형태입니다.\n- 최종 패킷 수정: 라우팅 결정 후이므로 출력 인터페이스를 알 수 있어, 해당 인터페이스의 IP로 소스 주소를 변경할 수 있습니다.\n- 패킷 mangling: 패킷 헤더 필드 수정 작업 (아래 상세 설명 참조)\n- 마지막 필터링: 전송 직전 마지막 보안 체크를 수행할 수 있습니다.\n\n중요: 패킷 Mangling이란?\n\n패킷 mangling은 패킷의 헤더 필드를 수정하는 작업을 의미합니다. "mangle"은 "손상시키다, 훼손하다"라는 의미이지만, 네트워크에서는 "패킷 헤더를 의도적으로 수정한다"는 의미로 사용됩니다.\n\n주요 Mangling 작업:\n\n1. TTL (Time To Live) 변경:\n   - IP 헤더의 TTL 필드를 수정합니다\n   - 예: iptables -t mangle -A POSTROUTING -j TTL --ttl-set 64\n   - 목적: 특정 홉 수를 강제하거나, 트레이스 라우트 결과를 변경\n   - 보안: TTL을 낮춰서 특정 네트워크로의 접근을 제한\n\n2. TOS (Type of Service) / DSCP 필드 수정:\n   - IP 헤더의 서비스 타입 필드를 수정합니다\n   - 예: iptables -t mangle -A POSTROUTING -j TOS --set-tos 0x10\n   - 목적: QoS(Quality of Service) 우선순위 설정\n   - 용도: 특정 트래픽에 높은 우선순위 부여\n\n3. MSS (Maximum Segment Size) 조정:\n   - TCP 헤더의 MSS 옵션을 수정합니다\n   - 예: iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1200\n   - 목적: MTU 불일치 문제 해결, VPN 터널링 시 패킷 크기 조정\n   - 용도: PMTUD(Path MTU Discovery) 실패 시 수동 조정\n\n4. 패킷 마킹 (Marking):\n   - 패킷에 마크를 추가하여 이후 처리에 영향을 줍니다\n   - 예: iptables -t mangle -A POSTROUTING -j MARK --set-mark 1\n   - 목적: 라우팅 정책, 트래픽 분류, QoS 정책 적용\n   - 용도: 특정 패킷을 다른 라우팅 테이블로 보내기\n\n5. 패킷 헤더의 기타 필드 수정:\n   - IP ID 필드 변경\n   - TCP/UDP 체크섬 재계산 (헤더 수정 후 필요)\n   - 패킷 길이 조정\n\nMangling 테이블:\n- iptables의 mangle 테이블에서 주로 수행됩니다\n- 예: iptables -t mangle -A POSTROUTING ...\n- mangle 테이블은 모든 hook 지점(PREROUTING, INPUT, FORWARD, OUTPUT, POSTROUTING)에서 사용 가능합니다\n\n실제 사용 사례:\n1. VPN 터널링: MSS를 조정하여 터널 헤더를 위한 공간 확보\n2. QoS: TOS/DSCP 필드를 설정하여 트래픽 우선순위 제어\n3. 보안: TTL을 조정하여 특정 네트워크로의 접근 제한\n4. 라우팅 정책: 패킷 마킹을 통해 특정 라우팅 테이블 사용\n5. 트래픽 제어: 패킷 분류를 위한 마킹\n\n동작 방식:\n1. 라우팅 결정이 완료된 후, 출력 인터페이스가 결정된 상태에서 실행됩니다.\n2. iptables의 POSTROUTING 체인 규칙이 순차적으로 검사됩니다.\n3. SNAT 규칙이 적용되면 패킷의 소스 IP 주소가 변경됩니다.\n4. MASQUERADE는 동적 IP 환경에서 자동으로 출력 인터페이스의 IP를 소스로 사용합니다.\n5. mangle 테이블 규칙이 적용되면 패킷 헤더 필드가 수정됩니다.\n6. NAT 테이블에 연결 정보가 기록되어, 응답 패킷이 올바르게 역변환됩니다.\n7. 패킷이 드라이버로 전달되어 실제 네트워크로 전송됩니다.\n8. 예를 들어, 내부 네트워크(192.168.1.0/24)의 패킷이 외부로 나갈 때 소스 IP를 공인 IP로 변경하는 것이 여기서 수행됩니다.',
       functions: ['nf_hook()', 'ip_finish_output()'], 
       position: { x: 1200, y: 250 } 
     },
@@ -433,9 +451,9 @@ const networkData = {
       label: 'qdisc / TC', 
       level: 'TC', 
       desc: '트래픽 제어',
-      detailedDesc: 'qdisc(Queueing Discipline)와 TC(Traffic Control)는 패킷 전송을 제어하는 메커니즘입니다. dev_queue_xmit() 함수가 호출되면, 네트워크 인터페이스에 연결된 qdisc가 패킷을 큐에 추가하거나 즉시 전송합니다. 다양한 qdisc 알고리즘(fq, cake, pfifo_fast 등)이 사용될 수 있으며, 트래픽 shaping(대역폭 제한), policing(트래픽 제한), 스케줄링 등을 수행합니다. eBPF TC hook도 여기서 실행되어 커스텀 패킷 처리가 가능합니다.',
+      detailedDesc: 'qdisc(Queueing Discipline)와 TC(Traffic Control)는 패킷 전송을 제어하는 메커니즘입니다. dev_queue_xmit() 함수가 호출되면, 네트워크 인터페이스에 연결된 qdisc가 패킷을 큐에 추가하거나 즉시 전송합니다. 다양한 qdisc 알고리즘(fq, cake, pfifo_fast 등)이 사용될 수 있으며, 트래픽 shaping(대역폭 제한), policing(트래픽 제한), 스케줄링 등을 수행합니다. eBPF TC hook도 여기서 실행되어 커스텀 패킷 처리가 가능합니다.\n\n중요: qdisc란?\n\n리눅스 네트워크에서 qdisc(queueing discipline)는 커널의 트래픽 컨트롤(Traffic Control, tc) 서브시스템에서 패킷을 인터페이스(주로 egress, 송신 방향)로 내보내기 전에 줄 세우고(큐잉), 스케줄링하고, 필요하면 드롭/지연/재정렬 하는 규칙(알고리즘)입니다. 쉽게 말해, NIC로 나가기 직전의 "대기줄(큐) 운영 방식"입니다.\n\n주요 역할:\n- 큐잉(Queueing): 패킷을 대기줄에 줄 세우기\n- 스케줄링(Scheduling): 어떤 패킷을 먼저 전송할지 결정\n- 드롭(Drop): 큐가 가득 차면 패킷 폐기\n- 지연(Delay): 트래픽 shaping을 통한 전송 지연\n- 재정렬(Reordering): 패킷 순서 조정\n\nOSI 계층: L3 → L2 전환 준비\n- IP 패킷이 완성된 상태 (L3 처리 완료)\n- L2 계층(드라이버)으로 전달하기 전 트래픽 제어\n- 출력 인터페이스 결정 완료, Ethernet 헤더 추가 준비',
       functions: ['dev_queue_xmit()', 'qdisc_run()', 'tc_classify()'], 
-      position: { x: 1500, y: 250 } 
+      position: { x: 1500, y: 200 } 
     },
     { 
       id: 'qdisc-queue', 
@@ -451,7 +469,7 @@ const networkData = {
       label: 'Driver', 
       level: 'DRIVER', 
       desc: '드라이버 전송',
-      detailedDesc: '드라이버의 ndo_start_xmit() 함수가 호출되어 패킷을 NIC 하드웨어로 전송합니다. 드라이버는 패킷을 하드웨어가 이해할 수 있는 형태로 변환하고, DMA를 통해 NIC의 전송 버퍼에 패킷을 복사합니다. 전송 완료 후에는 하드웨어 인터럽트를 통해 커널에 알립니다.',
+      detailedDesc: '드라이버의 ndo_start_xmit() 함수가 호출되어 패킷을 NIC 하드웨어로 전송합니다. 드라이버는 패킷을 하드웨어가 이해할 수 있는 형태로 변환하고, DMA를 통해 NIC의 전송 버퍼에 패킷을 복사합니다. 전송 완료 후에는 하드웨어 인터럽트를 통해 커널에 알립니다.\n\nOSI 계층: L2 (Data Link Layer) 처리\n- IP 패킷에 Ethernet 헤더 추가 (목적지 MAC 주소, 소스 MAC 주소, 프로토콜 타입 등)\n- ARP 테이블 조회를 통해 목적지 MAC 주소 결정\n- Ethernet 프레임으로 캡슐화\n- DMA를 통해 NIC TX Ring Buffer에 전송',
       functions: ['ndo_start_xmit()', 'netdev_start_xmit()'], 
       position: { x: 1800, y: 250 } 
     },
@@ -480,7 +498,7 @@ const networkData = {
       label: 'OUTPUT', 
       level: 'NETFILTER', 
       desc: '로컬 생성 패킷 처리',
-      detailedDesc: 'OUTPUT hook은 로컬 시스템에서 생성된 패킷에 대해 실행됩니다. 라우팅 결정 전에 실행되며, 로컬에서 생성된 패킷에 대한 필터링과 NAT를 수행합니다. SNAT의 초기 단계가 여기서 수행될 수 있습니다.',
+      detailedDesc: 'OUTPUT hook은 로컬 시스템에서 생성된 패킷에 대해 실행됩니다. 라우팅 결정 전에 실행되며, 로컬에서 생성된 패킷에 대한 필터링과 NAT를 수행합니다. SNAT의 초기 단계가 여기서 수행될 수 있습니다.\n\n중요: 이 노드는 "Netfilter OUTPUT" 노드의 세부 노드입니다\n- "Netfilter OUTPUT" 노드(netfilter-tx-out)와 같은 OUTPUT hook을 나타냅니다\n- 계층 구조에서 세부 정보를 보여주기 위한 노드입니다\n- NF_INET_LOCAL_OUT hook point에서 처리됩니다\n- ip_local_out() 함수가 이 hook을 호출합니다',
       functions: ['ip_local_out()'], 
       parent: 'netfilter-tx-out', 
       position: { x: 600, y: 350 } 
@@ -511,7 +529,7 @@ const networkData = {
       label: 'Packet Drop', 
       level: 'DROP', 
       desc: 'NAPI 백로그 초과',
-      detailedDesc: 'NAPI 폴링 중 백로그가 초과되면 패킷이 드롭됩니다.\n\n발생 원인:\n- net.core.netdev_max_backlog 값 초과\n- net.core.netdev_budget 값이 너무 작아 패킷 처리가 완료되지 않을 때\n- 고속 네트워크에서 패킷 도착 속도가 처리 속도를 초과할 때\n\n증상:\n- "netdev_max_backlog exceeded" 커널 메시지\n- 네트워크 인터페이스 통계에서 drop 증가\n- 패킷 손실로 인한 성능 저하\n\n해결 방법:\n- net.core.netdev_max_backlog 값 증가 (기본값: 1000)\n- net.core.netdev_budget 값 조정\n- CPU 성능 향상, 인터럽트 부하 감소',
+      detailedDesc: 'NAPI 폴링 중 net.core.netdev_max_backlog 큐가 가득 차면 패킷이 드롭됩니다.\n\n중요: netdev_max_backlog는 소켓 버퍼(rmem_max)와는 다른 단계의 버퍼입니다.\n- netdev_max_backlog: NIC → 커널로 들어온 "아직 프로토콜 처리 전 패킷"을 임시로 쌓아두는 큐 (NAPI 처리 단계)\n- rmem_max: TCP/UDP 소켓이 실제로 데이터를 보관하는 "애플리케이션 앞단 버퍼"의 최대 크기 (프로토콜 스택 처리 후)\n\n발생 원인:\n- net.core.netdev_max_backlog 값 초과: 패킷 도착 속도가 NAPI 처리 속도를 초과할 때\n- net.core.netdev_budget 값이 너무 작아 패킷 처리가 완료되지 않을 때\n- 고속 네트워크에서 패킷 도착 속도가 처리 속도를 초과할 때\n- CPU 부하가 높아 NAPI 폴링이 지연될 때\n\n증상:\n- "netdev_max_backlog exceeded" 커널 메시지\n- 네트워크 인터페이스 통계에서 drop 증가 (ifconfig의 RX dropped)\n- 패킷 손실로 인한 성능 저하\n- 애플리케이션에서 타임아웃 발생\n\n해결 방법:\n- net.core.netdev_max_backlog 값 증가 (기본값: 1000, 권장: 3000~5000)\n- net.core.netdev_budget 값 조정\n- CPU 성능 향상, 인터럽트 부하 감소\n- NIC 링 버퍼 크기 증가 (ethtool -G)\n\n참고: netdev_max_backlog를 증가시켜도 소켓 버퍼(rmem_max)가 부족하면 애플리케이션 레벨에서 성능 저하가 발생할 수 있습니다. 두 버퍼 모두 적절히 설정해야 합니다.',
       functions: ['netif_rx()', 'backlog overflow'], 
       position: { x: 600, y: -400 } 
     },
@@ -591,10 +609,10 @@ const networkData = {
     // 커널 옵션 노드 (RX와 TX 사이에 배치)
     { 
       id: 'opt-net', 
-      label: 'CONFIG_NET', 
+      label: 'CONFIG_NET_CORE', 
       level: 'KERNEL_OPTION', 
       desc: '네트워크 지원',
-      detailedDesc: '리눅스 커널의 기본 네트워크 지원을 활성화합니다. 이 옵션이 비활성화되면 네트워크 기능이 완전히 제거됩니다. 모든 네트워크 관련 기능의 기본 전제 조건입니다.\n\n관련 sysctl: net.core.* (모든 네트워크 관련 sysctl의 기반)\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.core.rmem_default = 212992 (수신 버퍼 기본 크기)\n- net.core.wmem_default = 212992 (송신 버퍼 기본 크기)\n- net.core.rmem_max = 212992 (수신 버퍼 최대 크기)\n- net.core.wmem_max = 212992 (송신 버퍼 최대 크기)\n- net.core.netdev_max_backlog = 1000 (네트워크 장치 백로그 최대값)\n\n값 변경 시 발생할 수 있는 사례:\n- net.core.netdev_max_backlog를 너무 작게 설정(예: 100): 고속 네트워크에서 패킷 드롭 발생, 네트워크 성능 저하\n- net.core.rmem_max를 너무 작게 설정: TCP 수신 버퍼가 부족하여 대역폭 활용도 감소, 특히 고속 네트워크에서 성능 저하\n- net.core.wmem_max를 너무 작게 설정: TCP 송신 버퍼가 부족하여 전송 속도 제한, 대용량 파일 전송 시 병목 발생',
+      detailedDesc: '리눅스 커널의 기본 네트워크 지원을 활성화합니다. 이 옵션이 비활성화되면 네트워크 기능이 완전히 제거됩니다. 모든 네트워크 관련 기능의 기본 전제 조건입니다.\n\n관련 sysctl: net.core.* (모든 네트워크 관련 sysctl의 기반)\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.core.rmem_default = 212992 (수신 버퍼 기본 크기)\n- net.core.wmem_default = 212992 (송신 버퍼 기본 크기)\n- net.core.rmem_max = 212992 (수신 버퍼 최대 크기, 모든 프로토콜에 적용)\n- net.core.wmem_max = 212992 (송신 버퍼 최대 크기, 모든 프로토콜에 적용)\n- net.core.netdev_max_backlog = 1000 (네트워크 장치 백로그 최대값)\n\n중요: netdev_max_backlog와 rmem_max의 차이\n\nnetdev_max_backlog:\n- 위치: NIC → 커널로 들어온 "아직 프로토콜 처리 전 패킷"을 임시로 쌓아두는 큐\n- 단계: NAPI 처리 단계, IP/TCP/UDP 스택 처리 이전\n- 용도: CPU/NAPI 처리 지연을 흡수하는 버퍼\n- 경로: [NIC] → [RX Ring] → [netdev_max_backlog] → [IP/TCP/UDP Stack]\n- 초과 시: 패킷 드롭 발생, "netdev_max_backlog exceeded" 메시지\n\nrmem_max:\n- 위치: TCP/UDP 소켓이 실제로 데이터를 보관하는 "애플리케이션 앞단 버퍼"의 최대 크기\n- 단계: 프로토콜 스택 처리 후, 애플리케이션 수신 전\n- 용도: 애플리케이션이 데이터를 읽을 때까지 보관하는 버퍼\n- 경로: [IP/TCP/UDP Stack] → [Socket Receive Buffer (rmem_default ~ rmem_max)] → [Application]\n- 부족 시: TCP 흐름 제어로 인한 전송 속도 제한, 대역폭 활용도 감소\n\n중요: TCP 소켓의 경우 net.ipv4.tcp_rmem과의 관계\n- net.ipv4.tcp_rmem: TCP 전용 버퍼 크기 (min default max 3개 값)\n- net.core.rmem_max: 시스템 전체 소켓 수신 버퍼 최대값 (모든 프로토콜에 적용)\n- 실제 TCP 소켓 최대 버퍼 크기 = min(net.ipv4.tcp_rmem[2], net.core.rmem_max)\n- 즉, 두 값 중 작은 값이 최종 제한이 됩니다.\n\n두 버퍼는 전혀 다른 단계에 위치하며 역할이 겹치지 않습니다. 하나만 키워서는 전체 성능 개선이 안 될 수 있으므로, 두 값 모두 적절히 설정해야 합니다.\n\n값 변경 시 발생할 수 있는 사례:\n- net.core.netdev_max_backlog를 너무 작게 설정(예: 100): 고속 네트워크에서 패킷 드롭 발생, 네트워크 성능 저하, NAPI 백로그 초과로 인한 패킷 손실\n- net.core.rmem_max를 너무 작게 설정: TCP 수신 버퍼가 부족하여 대역폭 활용도 감소, 특히 고속 네트워크에서 성능 저하, TCP 흐름 제어로 인한 전송 속도 제한. net.ipv4.tcp_rmem의 max 값이 크더라도 rmem_max가 작으면 rmem_max가 제한이 됩니다.\n- net.core.wmem_max를 너무 작게 설정: TCP 송신 버퍼가 부족하여 전송 속도 제한, 대용량 파일 전송 시 병목 발생',
       functions: [], 
       position: { x: 200, y: -50 } 
     },
@@ -603,7 +621,7 @@ const networkData = {
       label: 'CONFIG_INET', 
       level: 'KERNEL_OPTION', 
       desc: 'TCP/IP 지원',
-      detailedDesc: 'TCP/IP 프로토콜 스택을 활성화합니다. IPv4 네트워킹, TCP, UDP, ICMP 등의 프로토콜을 사용하려면 필수입니다. 이 옵션이 없으면 IP 기반 네트워킹이 불가능합니다.\n\n관련 sysctl: net.ipv4.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.ipv4.ip_forward = 0 (IP 포워딩 비활성화)\n- net.ipv4.tcp_rmem = 4096 131072 6291456 (TCP 수신 버퍼: min default max)\n- net.ipv4.tcp_wmem = 4096 16384 4194304 (TCP 송신 버퍼: min default max)\n- net.ipv4.tcp_congestion_control = cubic (TCP 혼잡 제어 알고리즘)\n- net.ipv4.tcp_syncookies = 1 (SYN flood 방어 활성화)\n- net.ipv4.conf.all.forwarding = 0 (모든 인터페이스 포워딩 비활성화)\n\n값 변경 시 발생할 수 있는 사례:\n- net.ipv4.ip_forward = 1로 변경: 시스템이 라우터 역할을 하게 되어 다른 네트워크 간 패킷을 전달. 보안상 위험할 수 있으므로 방화벽 설정 필요\n- net.ipv4.tcp_rmem을 너무 작게 설정(예: 4096 8192 16384): 고속 네트워크에서 TCP 수신 버퍼 부족으로 인한 성능 저하, 대역폭 활용도 감소, 패킷 재전송 증가\n- net.ipv4.tcp_rmem의 max 값을 초과하는 트래픽: 버퍼 오버플로우로 인한 패킷 손실, TCP 흐름 제어로 인한 전송 속도 제한\n- net.ipv4.tcp_wmem을 너무 작게 설정: 대용량 파일 전송 시 병목 발생, 전송 속도 저하\n- net.ipv4.tcp_syncookies = 0으로 변경: SYN flood 공격에 취약해짐, 많은 SYN 패킷으로 인한 서비스 거부 가능',
+      detailedDesc: 'TCP/IP 프로토콜 스택을 활성화합니다. IPv4 네트워킹, TCP, UDP, ICMP 등의 프로토콜을 사용하려면 필수입니다. 이 옵션이 없으면 IP 기반 네트워킹이 불가능합니다.\n\n관련 sysctl: net.ipv4.*\n주요 sysctl 및 Ubuntu 24.04 기본값:\n- net.ipv4.ip_forward = 0 (IP 포워딩 비활성화)\n- net.ipv4.tcp_rmem = 4096 131072 6291456 (TCP 수신 버퍼: min default max)\n- net.ipv4.tcp_wmem = 4096 16384 4194304 (TCP 송신 버퍼: min default max)\n- net.ipv4.tcp_congestion_control = cubic (TCP 혼잡 제어 알고리즘)\n- net.ipv4.tcp_syncookies = 1 (SYN flood 방어 활성화)\n- net.ipv4.conf.all.forwarding = 0 (모든 인터페이스 포워딩 비활성화)\n\n중요: net.ipv4.tcp_rmem과 net.core.rmem_max의 관계\n\n- net.ipv4.tcp_rmem: TCP 전용 수신 버퍼 크기 (min default max 3개 값)\n  - min: TCP 소켓의 최소 수신 버퍼 크기\n  - default: TCP 소켓의 기본 수신 버퍼 크기\n  - max: TCP 소켓의 최대 수신 버퍼 크기 (커널이 자동 조정할 때 참고)\n\n- net.core.rmem_max: 시스템 전체 소켓 수신 버퍼 최대값 (모든 프로토콜에 적용)\n\n- 실제 TCP 소켓 최대 버퍼 크기 = min(net.ipv4.tcp_rmem[2], net.core.rmem_max)\n  - 즉, 두 값 중 작은 값이 최종 제한이 됩니다.\n  - 예: tcp_rmem max = 6291456 (약 6MB), rmem_max = 212992 (약 208KB) → 실제 최대값 = 212992\n\n- TCP 버퍼를 늘리려면 두 값을 모두 적절히 설정해야 합니다.\n\n값 변경 시 발생할 수 있는 사례:\n- net.ipv4.ip_forward = 1로 변경: 시스템이 라우터 역할을 하게 되어 다른 네트워크 간 패킷을 전달. 보안상 위험할 수 있으므로 방화벽 설정 필요\n- net.ipv4.tcp_rmem을 너무 작게 설정(예: 4096 8192 16384): 고속 네트워크에서 TCP 수신 버퍼 부족으로 인한 성능 저하, 대역폭 활용도 감소, 패킷 재전송 증가\n- net.ipv4.tcp_rmem의 max 값을 크게 설정했지만 net.core.rmem_max가 작은 경우: rmem_max가 제한이 되어 tcp_rmem의 max 값이 무시됨, TCP 버퍼가 충분히 커지지 않아 성능 저하\n- net.ipv4.tcp_wmem을 너무 작게 설정: 대용량 파일 전송 시 병목 발생, 전송 속도 저하\n- net.ipv4.tcp_syncookies = 0으로 변경: SYN flood 공격에 취약해짐, 많은 SYN 패킷으로 인한 서비스 거부 가능',
       functions: [], 
       position: { x: 400, y: -50 } 
     },
@@ -738,7 +756,11 @@ const networkData = {
     { source: 'routing-rx', target: 'socket-rx' },
     { source: 'socket-rx', target: 'tcp-rx-buffer' },
     { source: 'socket-rx', target: 'socket-rx-queue' },
-    { source: 'socket-rx-queue', target: 'user-rx' },
+    { source: 'socket-rx', target: 'tcp-rx-buffer' },
+    { source: 'tcp-rx-buffer', target: 'socket-rx' },
+    { source: 'socket-rx-queue', target: 'wait-queue-rx' },
+    { source: 'wait-queue-rx', target: 'user-rx' },
+    { source: 'user-rx', target: 'wait-queue-rx' },
     
     // Netfilter Hook 연결 (RX)
     { source: 'netfilter-rx', target: 'nf:prerouting' },
@@ -748,8 +770,10 @@ const networkData = {
     { source: 'nf:input', target: 'socket-rx' },
     
     // TX 경로
-    { source: 'user-tx', target: 'socket-tx-queue' },
+    { source: 'user-tx', target: 'wait-queue-tx' },
+    { source: 'wait-queue-tx', target: 'socket-tx-queue' },
     { source: 'socket-tx-queue', target: 'socket-tx' },
+    { source: 'socket-tx-queue', target: 'wait-queue-tx' },
     { source: 'socket-tx', target: 'tcp-tx' },
     { source: 'socket-tx', target: 'tcp-tx-buffer' },
     { source: 'tcp-tx-buffer', target: 'tcp-tx' },
