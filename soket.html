@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Linux Socket Flow Map</title>
+  <script src="/js/cytoscape.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      display: flex;
+      height: 100vh;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      overflow: hidden;
+    }
+
+    #cy {
+      flex: 1;
+      background: #111;
+      position: relative;
+    }
+
+    #info {
+      width: 350px;
+      padding: 20px;
+      background: #1a1a1a;
+      border-left: 1px solid #333;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    #info h3 {
+      margin: 0 0 8px 0;
+      color: #7dd3fc;
+      font-size: 18px;
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 8px;
+    }
+
+    #info p {
+      margin: 8px 0;
+      line-height: 1.6;
+      color: #d1d5db;
+    }
+
+    #info .desc {
+      color: #9ca3af;
+      font-size: 14px;
+    }
+
+    #info .function-list {
+      margin-top: 12px;
+      padding-left: 20px;
+    }
+
+    #info .function-list li {
+      margin: 6px 0;
+      color: #60a5fa;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+
+    #info .level-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    #controls {
+      position: absolute;
+      top: 80px;
+      left: 20px;
+      background: rgba(26, 26, 26, 0.9);
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      z-index: 1000;
+    }
+
+    #controls h4 {
+      margin: 0 0 8px 0;
+      color: #7dd3fc;
+      font-size: 14px;
+    }
+
+    #controls .control-item {
+      margin: 4px 0;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    #zoom-level {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(26, 26, 26, 0.9);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #333;
+      z-index: 1000;
+      font-size: 12px;
+      color: #60a5fa;
+    }
+
+    #title {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(26, 26, 26, 0.95);
+      padding: 12px 24px;
+      border-radius: 8px;
+      z-index: 1000;
+      font-size: 20px;
+      font-weight: bold;
+      color: #7dd3fc;
+      text-align: left;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    #title-tcp-state {
+      position: absolute;
+      background: rgba(26, 26, 26, 0.95);
+      padding: 12px 24px;
+      border-radius: 8px;
+      z-index: 1000;
+      font-size: 20px;
+      font-weight: bold;
+      color: #7dd3fc;
+      text-align: left;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .legend {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #333;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+      font-size: 12px;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="cy"></div>
+
+<div id="info">
+  <h3>Socket이란 무엇인가</h3>
+  <p class="desc" style="margin-bottom: 12px;">
+    <a href="index.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block; margin-bottom: 8px;">네트워크 맵</a>
+    <a href="tutorial.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block;">네트워크 맵 실습 튜토리얼</a>
+    <a href="soket.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block; margin-bottom: 8px;">소켓 맵</a>
+  </p>
+  <p class="desc"><strong>핵심 메시지:</strong></p>
+  <p class="desc">소켓은 통신용 파일이 아니라 커널 상태 머신의 핸들입니다.</p>
+  <p class="desc" style="margin-top: 16px;"><strong>Chapter 1 주요 내용:</strong></p>
+  <ul class="function-list" style="margin-top: 8px;">
+    <li>Socket의 역사 (BSD Socket → Linux)</li>
+    <li>왜 file descriptor인가?</li>
+    <li>socket vs file vs pipe vs epoll</li>
+    <li>프로세스 관점에서 본 socket lifecycle</li>
+  </ul>
+  <p class="desc" style="margin-top: 16px;">노드를 클릭하여 상세 정보를 확인하세요.</p>
+  <p class="desc">마우스 휠로 확대/축소, 드래그로 이동할 수 있습니다.</p>
+</div>
+
+<div id="controls">
+  <h4>Controls</h4>
+  <div class="control-item">🖱️ 드래그: 이동</div>
+  <div class="control-item">🖱️ 휠: 확대/축소</div>
+  <div class="control-item">⌨️ 방향키: 이동</div>
+  <div class="control-item">⌨️ +/-: 확대/축소</div>
+  <div class="control-item">⌨️ ESC: 전체 보기</div>
+</div>
+
+<div id="zoom-level">Zoom: 1.00x</div>
+
+<script>
+// Socket 맵 데이터 - Chapter 1: Socket이란 무엇인가
+const socketData = {
+  nodes: [
+    // Socket의 역사 (상단 왼쪽)
+    {
+      id: 'bsd-socket',
+      label: 'BSD Socket\n(1983)',
+      level: 'HISTORY',
+      desc: 'Berkeley Software Distribution Socket',
+      detailedDesc: '1983년에 BSD 4.2에서 처음 도입된 Socket API입니다. Unix 계열 시스템에서 네트워크 프로그래밍을 위한 표준 인터페이스로 자리잡았습니다.\n\n특징:\n- "모든 것이 파일"이라는 Unix 철학을 네트워크에 적용\n- 파일 디스크립터를 통한 통일된 인터페이스\n- 다양한 프로토콜(IPv4, IPv6, Unix Domain 등) 지원',
+      functions: ['socket()', 'bind()', 'connect()', 'accept()'],
+      position: { x: -600, y: -350 }
+    },
+    {
+      id: 'linux-socket',
+      label: 'Linux Socket',
+      level: 'CORE',
+      desc: 'Linux 커널의 Socket 구현',
+      detailedDesc: 'Linux는 BSD Socket API를 호환하면서도, 내부적으로는 완전히 다른 구조로 구현되었습니다.\n\nLinux Socket의 특징:\n- POSIX 호환 API 제공 (BSD Socket과 동일한 인터페이스)\n- 커널 내부는 struct socket과 struct sock으로 분리\n- VFS(Virtual File System)와 통합되어 파일처럼 보임\n- epoll, io_uring 등 Linux 고유의 고성능 I/O 지원',
+      functions: ['sys_socket()', 'sys_bind()', 'sys_listen()'],
+      position: { x: -400, y: -350 }
+    },
+    
+    // 핵심 개념: Socket (상단 중앙)
+    {
+      id: 'socket-core',
+      label: 'Socket',
+      level: 'CORE',
+      desc: '커널 상태 머신의 핸들 (File Descriptor의 한 종류)',
+      detailedDesc: 'Socket은 File Descriptor의 한 종류로, 커널 내부의 상태 머신(State Machine)을 제어하는 핸들(Handle)입니다.\n\n중요: Regular File, Pipe와 같은 레벨의 File Descriptor 종류입니다!\n- Regular File: 디스크 파일용 File Descriptor\n- Pipe: 프로세스 간 통신용 File Descriptor\n- Socket: 네트워크 통신용 File Descriptor\n- 이들은 모두 File Descriptor이지만, 각각 다른 목적과 내부 구조를 가집니다\n\nSocket의 종류 (Address Family):\n- AF_INET: IPv4 네트워크 통신용 Socket\n- AF_INET6: IPv6 네트워크 통신용 Socket\n- AF_UNIX (Unix Domain Socket): 같은 머신 내 프로세스 간 통신용 Socket\n  → 중요: Unix Domain Socket도 Socket입니다! Pipe가 아닙니다!\n  → socket(AF_UNIX, ...)로 생성하며, 네트워크 스택을 거치지 않고 커널 내부에서 직접 통신\n  → Pipe와의 차이: 양방향 통신 가능, 임의의 프로세스 간 통신 가능, 파일 시스템 경로로 식별\n- AF_NETLINK: 커널과 사용자 공간 통신용 Socket\n\n핵심 개념:\n- File descriptor로 표현되지만 실제 파일이 아님\n- 커널 내부의 struct socket과 struct sock 구조체로 관리\n- 통신 상태(연결, 전송, 수신 등)를 추적하는 상태 머신\n- 큐(receive queue, send queue)를 통해 데이터 버퍼링\n\nSocket의 본질:\n"파일처럼 보이지만 파일이 아닌 것" - 프로세스는 파일처럼 read/write하지만, 커널은 네트워크 프로토콜 스택을 통해 실제 통신을 수행합니다.',
+      functions: ['socket()', 'struct socket', 'struct sock'],
+      position: { x: 0, y: -350 }
+    },
+    
+    // File Descriptor (상단 오른쪽)
+    {
+      id: 'file-descriptor',
+      label: 'File Descriptor',
+      level: 'KERNEL',
+      desc: '프로세스가 커널 자원을 참조하는 핸들',
+      detailedDesc: 'File Descriptor는 프로세스가 커널의 자원(파일, 소켓, 파이프 등)을 참조하는 정수형 핸들입니다.\n\n왜 Socket도 File Descriptor인가?\n- Unix 철학: "모든 것이 파일"\n- VFS(Virtual File System) 통합: Socket도 VFS의 inode로 관리\n- 통일된 인터페이스: read(), write(), close() 등 동일한 함수 사용 가능\n- 프로세스별 fd table로 관리: 각 프로세스는 독립적인 fd 공간 보유\n\n하지만 Socket은 파일이 아닙니다:\n- 디스크에 저장되지 않음\n- 커널 메모리의 구조체로만 존재\n- 네트워크 프로토콜 스택과 연결됨',
+      functions: ['open()', 'read()', 'write()', 'close()'],
+      position: { x: 400, y: -350 }
+    },
+    
+    // Socket Lifecycle (왼쪽 세로)
+    {
+      id: 'socket-create',
+      label: 'socket()',
+      level: 'LIFECYCLE',
+      desc: 'Socket 생성',
+      detailedDesc: '새로운 Socket을 생성합니다.\n\n커널 내부 동작:\n- struct socket 구조체 할당\n- 프로토콜별 struct sock 할당 (TCP/UDP 등)\n- VFS inode 생성 및 fd 할당\n- 초기 상태: SS_UNCONNECTED',
+      functions: ['sys_socket()', 'sock_create()'],
+      position: { x: -400, y: -150 }
+    },
+    {
+      id: 'socket-bind',
+      label: 'bind()',
+      level: 'LIFECYCLE',
+      desc: '주소 바인딩',
+      detailedDesc: 'Socket에 로컬 주소(IP, Port)를 할당합니다.\n\n커널 내부 동작:\n- 주소 중복 검사\n- 프로토콜별 바인딩 테이블에 등록\n- 상태: SS_UNCONNECTED 유지',
+      functions: ['sys_bind()', 'inet_bind()'],
+      position: { x: -400, y: -50 }
+    },
+    {
+      id: 'socket-listen',
+      label: 'listen()',
+      level: 'LIFECYCLE',
+      desc: '연결 대기 시작',
+      detailedDesc: '서버 Socket이 클라이언트 연결을 받을 준비를 합니다.\n\n커널 내부 동작:\n- backlog 큐 생성 (SYN backlog, accept queue)\n- 상태: SS_LISTENING\n- 클라이언트의 SYN 패킷 대기',
+      functions: ['sys_listen()', 'inet_listen()'],
+      position: { x: -400, y: 50 }
+    },
+    {
+      id: 'socket-accept',
+      label: 'accept()',
+      level: 'LIFECYCLE',
+      desc: '연결 수락',
+      detailedDesc: 'accept queue에서 완성된 연결을 가져와 새 Socket을 생성합니다.\n\n커널 내부 동작:\n- accept queue에서 완성된 연결 추출\n- 새로운 struct socket 할당 (클라이언트용)\n- 상태: SS_CONNECTED\n- TCP 3-way handshake 완료된 연결',
+      functions: ['sys_accept()', 'inet_accept()'],
+      position: { x: -400, y: 150 }
+    },
+    {
+      id: 'socket-connect',
+      label: 'connect()',
+      level: 'LIFECYCLE',
+      desc: '연결 요청',
+      detailedDesc: '클라이언트가 서버에 연결을 요청합니다.\n\n커널 내부 동작:\n- TCP 3-way handshake 시작\n- 상태 전이: SS_UNCONNECTED → SS_CONNECTING → SS_CONNECTED\n- SYN 패킷 전송 및 응답 대기',
+      functions: ['sys_connect()', 'inet_stream_connect()'],
+      position: { x: -400, y: 250 }
+    },
+    {
+      id: 'socket-io',
+      label: 'send/recv',
+      level: 'LIFECYCLE',
+      desc: '데이터 송수신',
+      detailedDesc: '연결된 Socket을 통해 데이터를 송수신합니다.\n\n커널 내부 동작:\n- send: 사용자 버퍼 → socket send queue → TCP → 네트워크\n- recv: 네트워크 → TCP → socket receive queue → 사용자 버퍼\n- blocking/non-blocking 모드에 따라 동작 다름\n- 상태: SS_CONNECTED 유지',
+      functions: ['sys_send()', 'sys_recv()', 'tcp_sendmsg()', 'tcp_recvmsg()'],
+      position: { x: -400, y: 350 }
+    },
+    {
+      id: 'socket-close',
+      label: 'close()',
+      level: 'LIFECYCLE',
+      desc: 'Socket 종료',
+      detailedDesc: 'Socket을 닫고 자원을 해제합니다.\n\n커널 내부 동작:\n- TCP: FIN 패킷 전송 (정상 종료)\n- 상태: SS_DISCONNECTING → SS_UNCONNECTED\n- struct socket, struct sock 해제\n- fd 테이블에서 제거',
+      functions: ['sys_close()', 'sock_close()', 'inet_release()'],
+      position: { x: -400, y: 450 }
+    },
+    
+    // Socket vs 다른 자원들 (중앙 세로)
+    // 중요: Regular File, Pipe, Socket은 모두 File Descriptor의 "다른 종류"입니다.
+    // 이들은 Socket의 종류가 아니며, Socket에 포함된 기능도 아닙니다.
+    {
+      id: 'epoll',
+      label: 'epoll',
+      level: 'COMPARISON',
+      desc: 'I/O 이벤트 모니터링 메커니즘',
+      detailedDesc: 'epoll은 Socket을 포함한 여러 File Descriptor의 I/O 이벤트를 효율적으로 모니터링하는 메커니즘입니다.\n\n중요: Socket의 종류도, Socket에 포함된 기능도 아닙니다!\n- epoll은 Socket, Regular File, Pipe 등 여러 File Descriptor를 모니터링하는 "도구"입니다\n- Socket 자체가 아니라 Socket의 상태 변화(읽기 가능, 쓰기 가능 등)를 감시합니다\n- 고성능 서버에서 여러 Socket을 동시에 효율적으로 처리하기 위해 사용됩니다\n\n특징:\n- Socket, Regular File, Pipe 등 여러 File Descriptor의 이벤트를 감지\n- select/poll보다 훨씬 효율적 (O(1) 복잡도)\n- Socket의 상태 변화를 감시하여 이벤트 기반 프로그래밍 지원\n- 고성능 서버에서 필수\n- epoll_create()로 생성, epoll_ctl()로 등록, epoll_wait()로 대기',
+      functions: ['epoll_create()', 'epoll_ctl()', 'epoll_wait()'],
+      position: { x: 0, y: -450 }
+    },
+    {
+      id: 'regular-file',
+      label: 'Regular File',
+      level: 'COMPARISON',
+      desc: '일반 파일 (File Descriptor의 한 종류)',
+      detailedDesc: 'Regular File은 File Descriptor의 한 종류로, 디스크에 저장되는 실제 파일입니다.\n\n중요: Socket의 종류가 아닙니다!\n- Regular File, Pipe, Socket은 모두 File Descriptor의 다른 "종류"입니다\n- 이들은 같은 레벨의 커널 자원이며, 모두 File Descriptor를 통해 접근됩니다\n- Unix 철학: "모든 것이 파일" - 파일, 파이프, 소켓 모두 File Descriptor로 통일\n\n특징:\n- 디스크 I/O를 통해 데이터 저장/읽기\n- 파일 시스템(inode)으로 관리\n- seek() 가능 (임의 위치 접근)\n- 영구 저장\n- open()으로 생성, read()/write()로 접근',
+      functions: ['open()', 'read()', 'write()', 'lseek()'],
+      position: { x: 0, y: -150 }
+    },
+    {
+      id: 'pipe',
+      label: 'Pipe',
+      level: 'COMPARISON',
+      desc: '프로세스 간 통신 (File Descriptor의 한 종류)',
+      detailedDesc: 'Pipe는 File Descriptor의 한 종류로, 같은 머신 내 프로세스 간 통신을 위한 자원입니다.\n\n중요: Socket의 종류가 아닙니다!\n- Regular File, Pipe, Socket은 모두 File Descriptor의 다른 "종류"입니다\n- Pipe는 Socket과 같은 레벨의 커널 자원입니다\n- Socket은 네트워크 통신용, Pipe는 로컬 프로세스 간 통신용\n\nPipe vs Unix Domain Socket (AF_UNIX):\n- Pipe: 단방향 통신, 부모-자식 프로세스 간 통신, pipe()로 생성\n- Unix Domain Socket: 양방향 통신, 임의의 프로세스 간 통신, socket(AF_UNIX, ...)로 생성\n- 중요: Unix Domain Socket은 Socket의 한 종류입니다! Pipe가 아닙니다!\n\n특징:\n- 커널 메모리의 버퍼 사용\n- 단방향 통신 (읽기/쓰기 엔드 분리)\n- 부모-자식 프로세스 간 통신에 주로 사용\n- 네트워크 없이 동일 머신 내 통신\n- pipe()로 생성, read()/write()로 접근',
+      functions: ['pipe()', 'read()', 'write()'],
+      position: { x: 0, y: -50 }
+    },
+    
+    // 커널 구조 (오른쪽 세로)
+    {
+      id: 'struct-socket',
+      label: 'struct socket',
+      level: 'KERNEL',
+      desc: 'VFS와의 인터페이스',
+      detailedDesc: 'struct socket은 VFS(Virtual File System)와의 인터페이스를 제공하는 구조체입니다.\n\n역할:\n- 파일 디스크립터와 연결\n- VFS inode와 연동\n- 프로세스가 접근하는 상위 레벨 인터페이스\n- struct sock을 포함 (실제 프로토콜 처리)',
+      functions: ['socket_alloc()', 'sock_alloc()'],
+      position: { x: 400, y: -150 }
+    },
+    {
+      id: 'struct-sock',
+      label: 'struct sock',
+      level: 'KERNEL',
+      desc: '프로토콜별 실제 구현',
+      detailedDesc: 'struct sock은 실제 네트워크 프로토콜(TCP/UDP 등)을 처리하는 구조체입니다.\n\n역할:\n- 프로토콜별 상태 관리 (TCP 상태 머신 등)\n- receive queue, send queue 관리\n- 네트워크 스택과 직접 연결\n- sk_buff 큐 관리',
+      functions: ['sk_alloc()', 'tcp_v4_init_sock()'],
+      position: { x: 400, y: -50 }
+    },
+    {
+      id: 'kernel-queues',
+      label: 'Kernel Queues',
+      level: 'KERNEL',
+      desc: 'Socket 내부 큐 구조',
+      detailedDesc: 'Socket은 여러 종류의 큐를 사용하여 데이터를 버퍼링합니다. 각 큐는 Socket의 생명주기와 성능에 직접적인 영향을 미칩니다.\n\n1. Receive Queue (sk_receive_queue)\n역할: 네트워크에서 수신된 데이터를 애플리케이션이 읽을 때까지 보관하는 큐\n위치: struct sock 구조체 내부\n동작: 프로토콜 스택(TCP/UDP)에서 처리된 패킷이 이 큐에 추가되고, 애플리케이션의 recv()/read()가 이 큐에서 데이터를 읽어갑니다.\n\n커널 옵션:\n- net.core.rmem_default: 기본 수신 버퍼 크기 (기본값: 212992 bytes)\n- net.core.rmem_max: 최대 수신 버퍼 크기 (기본값: 212992 bytes, 모든 프로토콜에 적용)\n- net.ipv4.tcp_rmem: TCP 전용 수신 버퍼 (min default max 3개 값, 기본값: 4096 87380 6291456)\n- 실제 TCP 소켓 최대 버퍼 = min(net.ipv4.tcp_rmem[2], net.core.rmem_max)\n\n2. Send Queue (sk_write_queue)\n역할: 애플리케이션이 전송한 데이터를 네트워크로 보내기 전까지 보관하는 큐\n위치: struct sock 구조체 내부\n동작: 애플리케이션의 send()/write()가 이 큐에 데이터를 추가하고, TCP/UDP가 네트워크로 전송합니다.\n\n커널 옵션:\n- net.core.wmem_default: 기본 송신 버퍼 크기 (기본값: 212992 bytes)\n- net.core.wmem_max: 최대 송신 버퍼 크기 (기본값: 212992 bytes, 모든 프로토콜에 적용)\n- net.ipv4.tcp_wmem: TCP 전용 송신 버퍼 (min default max 3개 값, 기본값: 4096 16384 4194304)\n- 실제 TCP 소켓 최대 버퍼 = min(net.ipv4.tcp_wmem[2], net.core.wmem_max)\n\n3. Accept Queue (완성된 연결 대기 큐)\n역할: TCP 3-way handshake가 완료된 연결을 accept()가 가져갈 때까지 대기시키는 큐 (서버 전용)\n위치: struct inet_connection_sock 구조체 내부\n동작: 클라이언트의 SYN → 서버의 SYN-ACK → 클라이언트의 ACK가 완료되면 이 큐에 추가됩니다.\n\n커널 옵션:\n- net.core.somaxconn: accept queue 최대 크기 (기본값: 4096)\n- listen()의 backlog 인자와 somaxconn 중 작은 값이 실제 크기가 됩니다.\n- 큐가 가득 차면: 클라이언트의 ACK가 무시되어 연결이 실패할 수 있습니다.\n\n4. SYN Backlog (SYN_RCVD 상태 연결 대기 큐)\n역할: SYN_RCVD 상태의 연결(SYN을 받았지만 아직 3-way handshake가 완료되지 않은 연결)을 보관하는 큐\n위치: struct inet_connection_sock 구조체 내부\n동작: 클라이언트의 SYN을 받고 SYN-ACK를 보낸 후, 클라이언트의 ACK를 기다리는 상태의 연결을 저장합니다.\n\n커널 옵션:\n- net.ipv4.tcp_max_syn_backlog: SYN backlog 최대 크기 (기본값: 2048)\n- SYN flood 공격 방어를 위해 제한됩니다.\n- 큐가 가득 차면: 새로운 SYN 패킷이 드롭되어 연결이 실패합니다.\n\n중요: 큐 크기와 성능\n- 큐가 너무 작으면: 고속 네트워크에서 패킷 드롭, 연결 실패, 성능 저하\n- 큐가 너무 크면: 메모리 사용량 증가, DDoS 공격에 취약\n- 적절한 크기 설정이 중요합니다.\n\n모니터링:\n- ss -i: 소켓의 수신/송신 큐 상태 확인\n- ss -tn state listen: LISTEN 소켓의 accept queue 확인\n- /proc/net/sockstat: 전체 소켓 통계',
+      functions: ['skb_queue_tail()', 'skb_dequeue()', 'sk_acceptq_added()', 'sk_acceptq_removed()'],
+      position: { x: 400, y: 50 }
+    },
+    
+    // TCP 소켓 상태 전이 (nginx 서버 예시)
+    {
+      id: 'nginx-start',
+      label: 'nginx 시작',
+      level: 'LIFECYCLE',
+      desc: 'nginx 서버 프로세스 시작',
+      detailedDesc: 'nginx 서버가 시작되면 마스터 프로세스가 워커 프로세스를 생성하고, 각 워커 프로세스가 서버 소켓을 생성합니다.\n\n초기 단계:\n- 마스터 프로세스: 설정 파일 읽기, 워커 프로세스 생성\n- 워커 프로세스: 서버 소켓 생성 준비',
+      functions: ['nginx master process', 'worker process'],
+      position: { x: 0, y: 500 }
+    },
+    {
+      id: 'tcp-socket-create',
+      label: 'socket()\nTCP 생성',
+      level: 'LIFECYCLE',
+      desc: 'TCP 소켓 생성',
+      detailedDesc: 'nginx 워커 프로세스가 서버 소켓을 생성합니다.\n\n커널 내부 동작:\n- socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) 호출\n- struct socket 구조체 할당\n- struct tcp_sock 할당\n- 초기 상태: SS_UNCONNECTED (TCP: CLOSED)',
+      functions: ['sys_socket()', 'inet_create()', 'tcp_v4_init_sock()'],
+      position: { x: 0, y: 600 }
+    },
+    {
+      id: 'tcp-bind',
+      label: 'bind()\n포트 80',
+      level: 'LIFECYCLE',
+      desc: '포트 80에 바인딩',
+      detailedDesc: 'nginx가 포트 80에 바인딩합니다.\n\n커널 내부 동작:\n- bind(0.0.0.0:80) 호출\n- 주소 중복 검사\n- inet_bind_hash_table에 등록\n- 상태: SS_UNCONNECTED (TCP: CLOSED) 유지',
+      functions: ['sys_bind()', 'inet_bind()'],
+      position: { x: 0, y: 700 }
+    },
+    {
+      id: 'tcp-listen',
+      label: 'listen()\nLISTEN 상태',
+      level: 'LIFECYCLE',
+      desc: '연결 대기 시작',
+      detailedDesc: 'nginx가 클라이언트 연결을 받을 준비를 합니다.\n\n커널 내부 동작:\n- listen(backlog=511) 호출\n- SYN backlog 큐 생성 (net.ipv4.tcp_max_syn_backlog)\n- Accept queue 생성 (min(backlog, net.core.somaxconn))\n- 상태: SS_LISTENING (TCP: LISTEN)\n\nnginx 설정:\n- listen 80;\n- backlog는 기본적으로 511 또는 somaxconn 중 작은 값',
+      functions: ['sys_listen()', 'inet_listen()', 'tcp_listen_start()'],
+      position: { x: 0, y: 800 }
+    },
+    {
+      id: 'tcp-listen-state',
+      label: 'LISTEN\n상태',
+      level: 'KERNEL',
+      desc: 'TCP LISTEN 상태',
+      detailedDesc: '서버 소켓이 클라이언트의 연결 요청을 기다리는 상태입니다.\n\n특징:\n- 클라이언트의 SYN 패킷을 받을 준비 완료\n- SYN backlog 큐: SYN_RCVD 상태 연결 대기\n- Accept queue: 완성된 연결 대기\n\n모니터링:\n- ss -tln state listen: LISTEN 상태 소켓 확인\n- ss -tnp | grep nginx: nginx 소켓 확인',
+      functions: ['tcp_v4_rcv()', 'tcp_rcv_state_process()'],
+      position: { x: 0, y: 900 }
+    },
+    {
+      id: 'client-syn',
+      label: '클라이언트\nSYN 패킷',
+      level: 'LIFECYCLE',
+      desc: '클라이언트 연결 요청',
+      detailedDesc: '클라이언트가 nginx 서버에 연결을 요청합니다.\n\n패킷 흐름:\n- 클라이언트: SYN 패킷 전송 (포트 80)\n- 서버: SYN 패킷 수신\n- 커널: tcp_v4_rcv()에서 처리\n\n커널 내부 동작:\n- LISTEN 소켓 찾기 (inet_csk_search_req())\n- 새로운 연결 요청 구조체 생성 (struct request_sock)\n- 상태: TCP_SYN_RECV (SYN_RCVD)\n- SYN backlog 큐에 추가',
+      functions: ['tcp_v4_rcv()', 'tcp_v4_conn_request()', 'inet_csk_reqsk_queue_hash_add()'],
+      position: { x: 200, y: 800 }
+    },
+    {
+      id: 'tcp-syn-rcvd',
+      label: 'SYN_RCVD\n상태',
+      level: 'KERNEL',
+      desc: 'TCP SYN_RCVD 상태',
+      detailedDesc: '서버가 클라이언트의 SYN을 받고 SYN-ACK를 보낸 후, 클라이언트의 ACK를 기다리는 상태입니다.\n\n특징:\n- SYN backlog 큐에 저장됨\n- 아직 accept queue에 없음 (3-way handshake 미완료)\n- net.ipv4.tcp_max_syn_backlog 크기 제한\n\nSYN flood 방어:\n- 큐가 가득 차면 새로운 SYN 패킷 드롭\n- SYN cookies 활성화 시 쿠키 기반 방어',
+      functions: ['tcp_synack_timer()', 'tcp_syn_rcv()'],
+      position: { x: 200, y: 900 }
+    },
+    {
+      id: 'server-syn-ack',
+      label: '서버\nSYN-ACK 전송',
+      level: 'LIFECYCLE',
+      desc: '서버가 SYN-ACK 응답',
+      detailedDesc: '서버가 클라이언트의 SYN에 대해 SYN-ACK를 전송합니다.\n\n커널 내부 동작:\n- tcp_v4_send_synack() 호출\n- SYN-ACK 패킷 생성 및 전송\n- 타이머 시작 (클라이언트 ACK 대기)\n- 상태: TCP_SYN_RECV 유지',
+      functions: ['tcp_v4_send_synack()', 'tcp_syn_ack_timer()'],
+      position: { x: 200, y: 1000 }
+    },
+    {
+      id: 'client-ack',
+      label: '클라이언트\nACK 패킷',
+      level: 'LIFECYCLE',
+      desc: '클라이언트가 ACK 전송',
+      detailedDesc: '클라이언트가 서버의 SYN-ACK에 대해 ACK를 전송합니다.\n\n3-way handshake 완료:\n- 클라이언트: ACK 전송\n- 서버: ACK 수신\n- 커널: tcp_v4_do_rcv()에서 처리\n\n커널 내부 동작:\n- tcp_check_req()에서 요청 검증\n- 새로운 소켓 생성 (struct sock)\n- 상태: TCP_ESTABLISHED\n- Accept queue로 이동',
+      functions: ['tcp_v4_do_rcv()', 'tcp_check_req()', 'tcp_v4_syn_recv_sock()'],
+      position: { x: 200, y: 1100 }
+    },
+    {
+      id: 'tcp-established',
+      label: 'ESTABLISHED\n상태',
+      level: 'KERNEL',
+      desc: 'TCP ESTABLISHED 상태',
+      detailedDesc: '3-way handshake가 완료되어 연결이 수립된 상태입니다.\n\n특징:\n- Accept queue에 저장됨\n- 애플리케이션(nginx)이 accept()를 호출할 때까지 대기\n- 데이터 송수신 준비 완료\n\nAccept queue:\n- net.core.somaxconn 크기 제한\n- 큐가 가득 차면 클라이언트의 ACK가 무시될 수 있음\n- ss -tn state established | grep :80: ESTABLISHED 연결 확인',
+      functions: ['tcp_rcv_established()', 'tcp_data_queue()'],
+      position: { x: 200, y: 1200 }
+    },
+    {
+      id: 'nginx-accept',
+      label: 'nginx\naccept()',
+      level: 'LIFECYCLE',
+      desc: '연결 수락',
+      detailedDesc: 'nginx 워커 프로세스가 accept()를 호출하여 완성된 연결을 가져옵니다.\n\n커널 내부 동작:\n- sys_accept() 호출\n- Accept queue에서 완성된 연결 추출\n- 새로운 파일 디스크립터 할당\n- 새로운 struct socket 생성 (클라이언트용)\n- 상태: SS_CONNECTED (TCP: ESTABLISHED)\n\nnginx 동작:\n- epoll_wait()로 이벤트 대기\n- 이벤트 발생 시 accept() 호출\n- 새로운 연결을 처리할 워커 프로세스 선택',
+      functions: ['sys_accept()', 'inet_accept()', 'tcp_accept()'],
+      position: { x: 0, y: 1200 }
+    },
+    {
+      id: 'new-socket',
+      label: '신규 소켓\n생성',
+      level: 'KERNEL',
+      desc: '클라이언트용 새 소켓',
+      detailedDesc: 'accept()를 통해 클라이언트 전용 새로운 소켓이 생성됩니다.\n\n특징:\n- 원본 LISTEN 소켓과는 별개의 소켓\n- 새로운 파일 디스크립터 할당\n- 클라이언트의 IP:Port 정보 포함\n- 상태: ESTABLISHED\n\nnginx에서:\n- 각 클라이언트 연결마다 새로운 소켓\n- 원본 LISTEN 소켓은 계속 LISTEN 상태 유지\n- ss -tnp | grep nginx: 여러 소켓 확인 가능',
+      functions: ['sock_alloc()', 'inet_csk_accept()'],
+      position: { x: 0, y: 1300 }
+    },
+    {
+      id: 'data-transfer',
+      label: '데이터\n송수신',
+      level: 'LIFECYCLE',
+      desc: 'HTTP 요청/응답',
+      detailedDesc: 'nginx와 클라이언트 간 HTTP 요청/응답이 이루어집니다.\n\n데이터 흐름:\n- 클라이언트: HTTP 요청 전송\n- nginx: 요청 수신 (recv queue)\n- nginx: HTTP 응답 생성 및 전송 (send queue)\n- 클라이언트: 응답 수신\n\n커널 내부:\n- 수신: tcp_rcv_established() → sk_receive_queue\n- 송신: tcp_sendmsg() → sk_write_queue → 네트워크\n- 상태: ESTABLISHED 유지',
+      functions: ['tcp_recvmsg()', 'tcp_sendmsg()', 'tcp_rcv_established()'],
+      position: { x: 0, y: 1400 }
+    },
+    {
+      id: 'tcp-close',
+      label: '연결 종료\nFIN',
+      level: 'LIFECYCLE',
+      desc: '연결 종료 시작',
+      detailedDesc: 'HTTP 요청/응답 완료 후 연결이 종료됩니다.\n\n종료 과정:\n- nginx: close() 호출 또는 클라이언트: FIN 전송\n- 서버: FIN 전송 → FIN_WAIT_1\n- 클라이언트: ACK → FIN_WAIT_2\n- 클라이언트: FIN → TIME_WAIT\n- 서버: ACK → CLOSED\n\n상태 전이:\n- ESTABLISHED → FIN_WAIT_1 → FIN_WAIT_2 → TIME_WAIT → CLOSED\n- 또는 ESTABLISHED → CLOSE_WAIT → LAST_ACK → CLOSED',
+      functions: ['tcp_close()', 'tcp_send_fin()', 'tcp_fin()'],
+      position: { x: 0, y: 1500 }
+    },
+    {
+      id: 'tcp-time-wait',
+      label: 'TIME_WAIT\n상태',
+      level: 'KERNEL',
+      desc: 'TCP TIME_WAIT 상태',
+      detailedDesc: '연결 종료 후 일정 시간 대기하는 상태입니다.\n\n목적:\n- 마지막 ACK가 손실된 경우를 대비\n- 같은 포트 재사용 방지 (2MSL 대기)\n- 네트워크에서 지연된 패킷 처리\n\n특징:\n- 기본 2MSL (Maximum Segment Lifetime) 대기\n- net.ipv4.tcp_fin_timeout: FIN_WAIT_2 상태 대기 시간\n- TIME_WAIT 소켓이 많으면 포트 고갈 가능\n\n모니터링:\n- ss -tn state time-wait: TIME_WAIT 상태 소켓 확인\n- netstat -an | grep TIME_WAIT',
+      functions: ['tcp_time_wait()', 'tcp_twsk_destructor()'],
+      position: { x: 200, y: 1400 }
+    }
+  ],
+  
+  edges: [
+    // Socket의 역사
+    { source: 'bsd-socket', target: 'linux-socket' },
+    { source: 'linux-socket', target: 'socket-core' },
+    
+    // File Descriptor 관계
+    { source: 'file-descriptor', target: 'socket-core' },
+    
+    // Socket vs 다른 자원들
+    { source: 'file-descriptor', target: 'regular-file' },
+    { source: 'file-descriptor', target: 'pipe' },
+    { source: 'epoll', target: 'socket-core' },
+    
+    // Socket Lifecycle
+    { source: 'socket-create', target: 'socket-bind' },
+    { source: 'socket-bind', target: 'socket-listen' },
+    { source: 'socket-listen', target: 'socket-accept' },
+    { source: 'socket-create', target: 'socket-connect' },
+    { source: 'socket-connect', target: 'socket-io' },
+    { source: 'socket-accept', target: 'socket-io' },
+    { source: 'socket-io', target: 'socket-close' },
+    { source: 'socket-core', target: 'socket-create' },
+    
+    // 커널 구조
+    { source: 'socket-core', target: 'struct-socket' },
+    { source: 'struct-socket', target: 'struct-sock' },
+    { source: 'struct-sock', target: 'kernel-queues' },
+    
+    // TCP 소켓 상태 전이 (nginx 서버 예시)
+    { source: 'nginx-start', target: 'tcp-socket-create' },
+    { source: 'tcp-socket-create', target: 'tcp-bind' },
+    { source: 'tcp-bind', target: 'tcp-listen' },
+    { source: 'tcp-listen', target: 'tcp-listen-state' },
+    { source: 'tcp-listen-state', target: 'client-syn' },
+    { source: 'client-syn', target: 'tcp-syn-rcvd' },
+    { source: 'tcp-syn-rcvd', target: 'server-syn-ack' },
+    { source: 'server-syn-ack', target: 'client-ack' },
+    { source: 'client-ack', target: 'tcp-established' },
+    { source: 'tcp-established', target: 'nginx-accept' },
+    { source: 'nginx-accept', target: 'new-socket' },
+    { source: 'new-socket', target: 'data-transfer' },
+    { source: 'data-transfer', target: 'tcp-close' },
+    { source: 'tcp-close', target: 'tcp-time-wait' }
+  ]
+};
+
+// 레벨별 색상 정의
+const LEVEL_COLORS = {
+  'CORE': '#2563eb',        // 파란색 - 핵심 개념
+  'HISTORY': '#7c3aed',     // 보라색 - 역사
+  'KERNEL': '#dc2626',      // 빨간색 - 커널 구조
+  'LIFECYCLE': '#059669',   // 초록색 - 생명주기
+  'COMPARISON': '#ea580c'   // 주황색 - 비교
+};
+
+// Cytoscape 인스턴스 생성
+const cy = cytoscape({
+  container: document.getElementById('cy'),
+  
+  wheelSensitivity: 0.15,
+  minZoom: 0.2,
+  maxZoom: 4,
+  panningEnabled: true,
+  zoomingEnabled: true,
+  
+  style: [
+    {
+      selector: 'node',
+      style: {
+        'label': 'data(label)',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'color': '#fff',
+        'background-color': 'data(color)',
+        'width': 140,
+        'height': 60,
+        'font-size': 13,
+        'font-weight': 'bold',
+        'shape': 'roundrectangle',
+        'border-width': 2,
+        'border-color': '#fff',
+        'text-wrap': 'wrap',
+        'text-max-width': 130
+      }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'width': 3,
+        'line-color': '#60a5fa',
+        'target-arrow-color': '#60a5fa',
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'opacity': 0.7
+      }
+    }
+  ],
+  
+  elements: {
+    nodes: socketData.nodes.map(node => ({
+      data: {
+        id: node.id,
+        label: node.label,
+        level: node.level,
+        desc: node.desc,
+        detailedDesc: node.detailedDesc || '',
+        functions: node.functions || [],
+        color: LEVEL_COLORS[node.level] || '#666'
+      },
+      position: node.position
+    })),
+    edges: socketData.edges.map(edge => ({
+      data: {
+        source: edge.source,
+        target: edge.target
+      }
+    }))
+  },
+  
+  layout: {
+    name: 'preset'
+  }
+});
+
+// 정보 패널 업데이트
+const info = document.getElementById('info');
+const zoomLevelDisplay = document.getElementById('zoom-level');
+
+// 레벨별 한글 이름
+const levelNames = {
+  'CORE': '핵심 개념',
+  'HISTORY': '역사',
+  'KERNEL': '커널 구조',
+  'LIFECYCLE': '생명주기',
+  'COMPARISON': '비교'
+};
+
+// 정보 패널 업데이트 함수
+function updateInfoPanel(node) {
+  const level = node.data('level');
+  const functions = node.data('functions') || [];
+  
+  let html = `
+    <h3>${node.data('label')}</h3>
+    <p><span class="level-badge" style="background: ${node.data('color')}; color: #fff;">${levelNames[level] || level}</span></p>
+    <p class="desc"><strong>${node.data('desc')}</strong></p>
+  `;
+  
+  const detailedDesc = node.data('detailedDesc');
+  if (detailedDesc) {
+    const formattedDesc = detailedDesc.replace(/\n/g, '<br>');
+    html += `<p class="desc">${formattedDesc}</p>`;
+  }
+  
+  if (functions.length > 0) {
+    html += '<p class="desc"><strong>관련 함수/구조체:</strong></p>';
+    html += '<ul class="function-list">';
+    functions.forEach(func => {
+      html += `<li>${func}</li>`;
+    });
+    html += '</ul>';
+  }
+  
+  info.innerHTML = html;
+}
+
+// 노드 클릭 이벤트
+cy.on('tap', 'node', (evt) => {
+  const node = evt.target;
+  updateInfoPanel(node);
+});
+
+// 배경 클릭 시 초기 메시지 표시
+cy.on('tap', (evt) => {
+  if (evt.target === cy) {
+    info.innerHTML = `
+      <h3>Socket이란 무엇인가</h3>
+      <p class="desc" style="margin-bottom: 12px;">
+        <a href="index.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block; margin-bottom: 8px;">네트워크 맵</a>
+        <a href="tutorial.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block;">네트워크 맵 실습 튜토리얼</a>
+        <a href="soket.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block; margin-bottom: 8px;">소켓 맵</a>
+      </p>
+      <p class="desc"><strong>핵심 메시지:</strong></p>
+      <p class="desc">소켓은 통신용 파일이 아니라 커널 상태 머신의 핸들입니다.</p>
+      <p class="desc">노드를 클릭하여 상세 정보를 확인하세요.</p>
+      <p class="desc">마우스 휠로 확대/축소, 드래그로 이동할 수 있습니다.</p>
+    `;
+  }
+});
+
+// Zoom 이벤트 핸들러
+cy.on('zoom', () => {
+  const z = cy.zoom();
+  zoomLevelDisplay.textContent = `Zoom: ${z.toFixed(2)}x`;
+});
+
+// 키보드 이벤트
+document.addEventListener('keydown', e => {
+  const pan = cy.pan();
+  const step = 80;
+  const zoomStep = 0.2;
+
+  switch (e.key) {
+    case 'ArrowUp':
+      cy.pan({ x: pan.x, y: pan.y + step });
+      break;
+    case 'ArrowDown':
+      cy.pan({ x: pan.x, y: pan.y - step });
+      break;
+    case 'ArrowLeft':
+      cy.pan({ x: pan.x + step, y: pan.y });
+      break;
+    case 'ArrowRight':
+      cy.pan({ x: pan.x - step, y: pan.y });
+      break;
+    case '+':
+    case '=':
+      cy.zoom(cy.zoom() + zoomStep);
+      break;
+    case '-':
+    case '_':
+      cy.zoom(cy.zoom() - zoomStep);
+      break;
+    case 'Escape':
+      cy.fit();
+      break;
+  }
+});
+
+// 초기 전체 보기
+cy.ready(() => {
+  cy.fit(50);
+  zoomLevelDisplay.textContent = `Zoom: ${cy.zoom().toFixed(2)}x`;
+});
+</script>
+
+</body>
+</html>
