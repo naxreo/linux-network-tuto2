@@ -28,7 +28,7 @@
     }
 
     #info {
-      width: 350px;
+      width: 525px;
       padding: 20px;
       background: #1a1a1a;
       border-left: 1px solid #333;
@@ -80,7 +80,7 @@
 
     #controls {
       position: absolute;
-      top: 80px;
+      top: 20px;
       left: 20px;
       background: rgba(26, 26, 26, 0.9);
       padding: 12px;
@@ -171,8 +171,9 @@
   <h3>Socket이란 무엇인가</h3>
   <p class="desc" style="margin-bottom: 12px;">
     <a href="index.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block; margin-bottom: 8px;">네트워크 맵</a>
-    <a href="tutorial.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block;">네트워크 맵 실습 튜토리얼</a>
+    <a href="tutorial.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block; margin-bottom: 8px;">네트워크 맵 실습 튜토리얼</a>
     <a href="soket.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block; margin-bottom: 8px;">소켓 맵</a>
+    <a href="socket-tutorial.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block;">소켓 맵 실습 튜토리얼</a>
   </p>
   <p class="desc"><strong>핵심 메시지:</strong></p>
   <p class="desc">소켓은 통신용 파일이 아니라 커널 상태 머신의 핸들입니다.</p>
@@ -503,7 +504,177 @@ const socketData = {
       desc: 'TCP TIME_WAIT 상태',
       detailedDesc: '연결 종료 후 일정 시간 대기하는 상태입니다.\n\n목적:\n- 마지막 ACK가 손실된 경우를 대비\n- 같은 포트 재사용 방지 (2MSL 대기)\n- 네트워크에서 지연된 패킷 처리\n\n특징:\n- 기본 2MSL (Maximum Segment Lifetime) 대기\n- net.ipv4.tcp_fin_timeout: FIN_WAIT_2 상태 대기 시간\n- TIME_WAIT 소켓이 많으면 포트 고갈 가능\n\n모니터링:\n- ss -tn state time-wait: TIME_WAIT 상태 소켓 확인\n- netstat -an | grep TIME_WAIT',
       functions: ['tcp_time_wait()', 'tcp_twsk_destructor()'],
-      position: { x: 200, y: 1400 }
+      position: { x: 200, y: 1500 }
+    },
+    
+    // 커널 큐 및 버퍼 노드 (nginx 관련)
+    {
+      id: 'syn-backlog-queue',
+      label: 'SYN Backlog\nQueue',
+      level: 'KERNEL',
+      desc: 'SYN_RCVD 상태 연결 대기 큐',
+      detailedDesc: 'SYN Backlog Queue는 서버가 클라이언트의 SYN 패킷을 받고 SYN-ACK를 보낸 후, 클라이언트의 ACK를 기다리는 동안의 연결 요청을 보관하는 큐입니다.\n\n역할:\n- SYN_RCVD 상태의 연결 요청을 임시 저장\n- 3-way handshake가 완료되기 전 단계의 연결 관리\n- struct inet_connection_sock 구조체 내부에 위치\n\nnginx에서의 동작:\n- 클라이언트가 SYN 패킷 전송\n- nginx 서버 소켓이 SYN 수신 및 SYN-ACK 전송\n- 클라이언트의 ACK를 기다리는 동안 이 큐에 저장\n- ACK 수신 시 Accept Queue로 이동\n\n커널 옵션:\n- net.ipv4.tcp_max_syn_backlog: 최대 큐 크기 (기본값: 2048)\n- 큐가 가득 차면 새로운 SYN 패킷이 드롭되어 연결 실패\n\nSYN Flood 방어:\n- 큐 크기 제한으로 메모리 보호\n- SYN cookies 활성화 시 쿠키 기반 방어 메커니즘\n- 큐 오버플로우 시 연결 거부\n\n모니터링:\n- ss -tn state syn-recv: SYN_RCVD 상태 소켓 확인\n- netstat -an | grep SYN_RECV\n- /proc/net/sockstat: 전체 소켓 통계',
+      functions: ['inet_csk_reqsk_queue_hash_add()', 'inet_csk_reqsk_queue_drop()', 'tcp_v4_conn_request()'],
+      position: { x: 400, y: 850 }
+    },
+    {
+      id: 'accept-queue',
+      label: 'Accept Queue\n(완성된 연결)',
+      level: 'KERNEL',
+      desc: '3-way handshake 완료된 연결 대기 큐',
+      detailedDesc: 'Accept Queue는 TCP 3-way handshake가 완료되어 ESTABLISHED 상태가 된 연결을 애플리케이션이 accept()를 호출할 때까지 대기시키는 큐입니다.\n\n역할:\n- 완성된 연결을 accept()가 가져갈 때까지 보관\n- 서버 전용 큐 (LISTEN 소켓에만 존재)\n- struct inet_connection_sock 구조체 내부에 위치\n\nnginx에서의 동작:\n- 클라이언트의 ACK 수신으로 3-way handshake 완료\n- 연결이 ESTABLISHED 상태로 전이\n- 이 큐에 추가되어 nginx의 accept() 호출 대기\n- nginx 워커 프로세스가 accept() 호출 시 큐에서 제거\n\n커널 옵션:\n- net.core.somaxconn: 최대 큐 크기 (기본값: 4096)\n- listen()의 backlog 인자와 somaxconn 중 작은 값이 실제 크기\n- 큐가 가득 차면 클라이언트의 ACK가 무시되어 연결 실패 가능\n\n성능 영향:\n- 큐가 작으면: 고부하 시 연결 거부, 클라이언트 재시도 증가\n- 큐가 크면: 메모리 사용량 증가, DDoS 공격에 취약\n- nginx 설정: listen 80 backlog=511 (somaxconn과 조정 필요)\n\n모니터링:\n- ss -tn state listen: LISTEN 소켓의 accept queue 확인\n- ss -tn state established | grep :80: ESTABLISHED 연결 수 확인\n- netstat -an | grep ESTABLISHED',
+      functions: ['sk_acceptq_added()', 'sk_acceptq_removed()', 'inet_csk_accept()', 'tcp_check_req()'],
+      position: { x: -200, y: 1150 }
+    },
+    {
+      id: 'receive-queue',
+      label: 'Receive Queue\n(수신 버퍼)',
+      level: 'KERNEL',
+      desc: '네트워크에서 수신된 데이터 버퍼',
+      detailedDesc: 'Receive Queue (sk_receive_queue)는 네트워크에서 수신된 데이터를 애플리케이션이 recv()/read()를 호출하여 읽을 때까지 보관하는 버퍼입니다.\n\n역할:\n- TCP/UDP 프로토콜 스택에서 처리된 패킷을 임시 저장\n- 애플리케이션이 읽을 준비가 될 때까지 데이터 버퍼링\n- struct sock 구조체 내부의 sk_receive_queue에 위치\n\nnginx에서의 동작:\n- 클라이언트가 HTTP 요청 전송\n- TCP가 패킷을 수신하여 이 큐에 추가\n- nginx가 recv()/read() 호출 시 큐에서 데이터 읽기\n- 큐가 비어있으면 recv()는 블로킹되거나 EAGAIN 반환\n\n커널 옵션:\n- net.core.rmem_default: 기본 수신 버퍼 크기 (기본값: 212992 bytes)\n- net.core.rmem_max: 최대 수신 버퍼 크기 (기본값: 212992 bytes)\n- net.ipv4.tcp_rmem: TCP 전용 수신 버퍼 (min default max, 기본값: 4096 87380 6291456)\n- 실제 TCP 소켓 최대 버퍼 = min(net.ipv4.tcp_rmem[2], net.core.rmem_max)\n\n성능 영향:\n- 버퍼가 작으면: 고속 네트워크에서 패킷 드롭, TCP 윈도우 축소, 성능 저하\n- 버퍼가 크면: 메모리 사용량 증가, 지연 시간 증가\n- 동적 조정: TCP는 네트워크 상태에 따라 버퍼 크기 자동 조정\n\n모니터링:\n- ss -i: 소켓의 수신 큐 상태 확인 (Recv-Q)\n- cat /proc/net/sockstat: 전체 소켓 통계\n- netstat -an | grep ESTABLISHED',
+      functions: ['tcp_rcv_established()', 'tcp_data_queue()', 'skb_queue_tail()', 'skb_dequeue()', 'tcp_recvmsg()'],
+      position: { x: -200, y: 1350 }
+    },
+    {
+      id: 'send-queue',
+      label: 'Send Queue\n(송신 버퍼)',
+      level: 'KERNEL',
+      desc: '전송 대기 중인 데이터 버퍼',
+      detailedDesc: 'Send Queue (sk_write_queue)는 애플리케이션이 send()/write()를 호출하여 전송한 데이터를 네트워크로 보내기 전까지 보관하는 버퍼입니다.\n\n역할:\n- 애플리케이션이 전송한 데이터를 임시 저장\n- TCP/UDP가 네트워크로 전송할 준비가 될 때까지 버퍼링\n- struct sock 구조체 내부의 sk_write_queue에 위치\n\nnginx에서의 동작:\n- nginx가 HTTP 응답 생성 후 send()/write() 호출\n- 데이터가 이 큐에 추가됨\n- TCP가 네트워크로 전송 (TCP 윈도우, 혼잡 제어 고려)\n- 큐가 가득 차면 send()는 블로킹되거나 EAGAIN 반환\n\n커널 옵션:\n- net.core.wmem_default: 기본 송신 버퍼 크기 (기본값: 212992 bytes)\n- net.core.wmem_max: 최대 송신 버퍼 크기 (기본값: 212992 bytes)\n- net.ipv4.tcp_wmem: TCP 전용 송신 버퍼 (min default max, 기본값: 4096 16384 4194304)\n- 실제 TCP 소켓 최대 버퍼 = min(net.ipv4.tcp_wmem[2], net.core.wmem_max)\n\n성능 영향:\n- 버퍼가 작으면: 고속 전송 시 블로킹, TCP 윈도우 축소, 처리량 저하\n- 버퍼가 크면: 메모리 사용량 증가, 지연 시간 증가\n- 동적 조정: TCP는 네트워크 상태에 따라 버퍼 크기 자동 조정\n- Zero-copy 최적화: sendfile() 사용 시 버퍼 우회 가능\n\n모니터링:\n- ss -i: 소켓의 송신 큐 상태 확인 (Send-Q)\n- cat /proc/net/sockstat: 전체 소켓 통계\n- netstat -an | grep ESTABLISHED',
+      functions: ['tcp_sendmsg()', 'tcp_send_skb()', 'skb_queue_tail()', 'skb_dequeue()', 'tcp_write_xmit()'],
+      position: { x: 200, y: 1350 }
+    },
+    
+    // nginx 노드 그룹 - Packet Drop 및 RST 이슈 노드
+    {
+      id: 'drop-syn-backlog',
+      label: 'Packet Drop',
+      level: 'DROP',
+      desc: 'SYN Backlog Queue 오버플로우',
+      detailedDesc: 'SYN Backlog Queue가 가득 차면 새로운 SYN 패킷이 드롭됩니다.\n\n발생 원인:\n- net.ipv4.tcp_max_syn_backlog 값 초과: SYN_RCVD 상태 연결이 큐 크기를 초과할 때\n- SYN flood 공격: 악의적인 클라이언트가 대량의 SYN 패킷을 전송하여 큐를 포화시킬 때\n- 고속 네트워크에서 연결 요청 속도가 accept() 처리 속도를 초과할 때\n- nginx 워커 프로세스가 accept()를 충분히 빠르게 처리하지 못할 때\n\n증상:\n- 클라이언트 연결 실패: "Connection refused" 또는 타임아웃\n- ss -tn state syn-recv: SYN_RCVD 상태 소켓 수가 tcp_max_syn_backlog에 근접\n- /proc/net/sockstat: TCPInErrs 카운터 증가\n- nginx 로그에 연결 실패 기록\n\n해결 방법:\n- net.ipv4.tcp_max_syn_backlog 값 증가 (기본값: 2048, 권장: 4096~8192)\n- net.ipv4.tcp_syncookies = 1 활성화: SYN flood 방어 (기본값: 1)\n- nginx worker_connections 값 증가\n- nginx 워커 프로세스 수 조정\n- CPU 부하 감소, accept() 처리 속도 향상\n\n모니터링:\n- ss -tn state syn-recv | wc -l: SYN_RCVD 상태 소켓 수 확인\n- cat /proc/sys/net/ipv4/tcp_max_syn_backlog: 현재 설정값 확인\n- netstat -s | grep -i "SYNs to LISTEN": SYN 패킷 통계',
+      functions: ['inet_csk_reqsk_queue_hash_add()', 'inet_csk_reqsk_queue_drop()'],
+      position: { x: 650, y: 850 }
+    },
+    {
+      id: 'drop-accept-queue',
+      label: 'Packet Drop',
+      level: 'DROP',
+      desc: 'Accept Queue 오버플로우',
+      detailedDesc: 'Accept Queue가 가득 차면 클라이언트의 ACK 패킷이 무시되어 연결이 실패합니다.\n\n발생 원인:\n- net.core.somaxconn 값 초과: 완성된 연결이 큐 크기를 초과할 때\n- listen()의 backlog 인자와 somaxconn 중 작은 값이 실제 크기\n- nginx가 accept()를 충분히 빠르게 호출하지 못할 때\n- 고부하 상황에서 연결 요청 속도가 accept() 처리 속도를 초과할 때\n- 워커 프로세스가 모두 바쁘거나 epoll 이벤트 처리 지연\n\n증상:\n- 클라이언트 연결 실패: 3-way handshake는 완료되었지만 연결이 끊김\n- ss -tn state listen: Recv-Q 값이 큐 크기에 근접\n- 클라이언트에서 "Connection reset by peer" 또는 타임아웃\n- nginx 로그에 연결 수락 실패 기록\n\n해결 방법:\n- net.core.somaxconn 값 증가 (기본값: 4096, 권장: 8192~16384)\n- nginx listen 지시어에 backlog 값 명시: listen 80 backlog=8192\n- nginx worker_connections 값 증가\n- nginx 워커 프로세스 수 조정\n- epoll 이벤트 처리 최적화, CPU 부하 감소\n\n중요:\n- somaxconn과 listen()의 backlog 중 작은 값이 실제 큐 크기\n- 큐가 가득 차면 클라이언트의 ACK가 무시되어 연결 실패\n- 큐 크기를 너무 크게 설정하면 메모리 사용량 증가 및 DDoS 공격에 취약\n\n모니터링:\n- ss -tn state listen: Recv-Q 값 확인 (큐에 대기 중인 연결 수)\n- cat /proc/sys/net/core/somaxconn: 현재 설정값 확인\n- nginx access.log에서 연결 실패 패턴 분석',
+      functions: ['sk_acceptq_added()', 'tcp_check_req()'],
+      position: { x: -450, y: 1150 }
+    },
+    {
+      id: 'drop-receive-buffer',
+      label: 'Packet Drop',
+      level: 'DROP',
+      desc: 'TCP 수신 버퍼 오버플로우',
+      detailedDesc: 'TCP 수신 버퍼(Receive Queue)가 가득 차면 패킷이 드롭됩니다.\n\n발생 원인:\n- net.ipv4.tcp_rmem 또는 net.core.rmem_max 값 초과: 수신 버퍼 크기 제한 초과\n- 애플리케이션이 recv()/read()를 충분히 빠르게 호출하지 못할 때\n- 고속 네트워크에서 데이터 수신 속도가 애플리케이션 처리 속도를 초과할 때\n- nginx가 HTTP 요청을 충분히 빠르게 읽지 못할 때\n- TCP 윈도우가 0이 되어 더 이상 데이터를 받을 수 없을 때\n\n증상:\n- 패킷 재전송 증가: TCP 재전송 타임아웃 발생\n- 네트워크 성능 저하: 대역폭 활용도 감소\n- ss -i: Recv-Q 값이 버퍼 크기에 근접\n- TCP 흐름 제어로 인한 전송 속도 제한\n- nginx에서 요청 처리 지연\n\n해결 방법:\n- net.ipv4.tcp_rmem 값 증가 (min default max, 예: 4096 131072 6291456)\n- net.core.rmem_max 값 증가 (tcp_rmem max와 함께 조정 필요)\n- 실제 최대값 = min(net.ipv4.tcp_rmem[2], net.core.rmem_max)\n- nginx 버퍼 크기 설정 조정 (client_body_buffer_size 등)\n- 애플리케이션 처리 속도 향상, CPU 부하 감소\n\n중요:\n- tcp_rmem의 max 값이 크더라도 rmem_max가 작으면 rmem_max가 제한이 됩니다\n- 두 값을 모두 적절히 설정해야 합니다\n- 버퍼가 너무 크면 메모리 사용량 증가 및 지연 시간 증가\n\n모니터링:\n- ss -i: 소켓의 Recv-Q 값 확인\n- cat /proc/sys/net/ipv4/tcp_rmem: TCP 수신 버퍼 설정 확인\n- cat /proc/sys/net/core/rmem_max: 시스템 전체 수신 버퍼 최대값 확인\n- netstat -s | grep -i "segments retransmitted": 재전송 통계',
+      functions: ['tcp_rcv_established()', 'tcp_data_queue()', 'tcp_validate_incoming()'],
+      position: { x: -450, y: 1350 }
+    },
+    {
+      id: 'drop-send-buffer',
+      label: 'Packet Drop',
+      level: 'DROP',
+      desc: 'TCP 송신 버퍼 오버플로우',
+      detailedDesc: 'TCP 송신 버퍼(Send Queue)가 가득 차면 데이터 전송이 블로킹되거나 드롭될 수 있습니다.\n\n발생 원인:\n- net.ipv4.tcp_wmem 또는 net.core.wmem_max 값 초과: 송신 버퍼 크기 제한 초과\n- 네트워크 대역폭이 애플리케이션 전송 속도를 따라가지 못할 때\n- TCP 혼잡 제어로 인한 전송 속도 제한\n- nginx가 HTTP 응답을 충분히 빠르게 전송하지 못할 때\n- 원격 호스트의 수신 윈도우가 작아서 전송이 제한될 때\n\n증상:\n- send()/write() 블로킹: 애플리케이션이 전송 대기 상태로 진입\n- ss -i: Send-Q 값이 버퍼 크기에 근접\n- 네트워크 처리량 저하: 대역폭 활용도 감소\n- nginx에서 응답 전송 지연\n- 논블로킹 모드에서는 EAGAIN/EWOULDBLOCK 반환\n\n해결 방법:\n- net.ipv4.tcp_wmem 값 증가 (min default max, 예: 4096 16384 4194304)\n- net.core.wmem_max 값 증가 (tcp_wmem max와 함께 조정 필요)\n- 실제 최대값 = min(net.ipv4.tcp_wmem[2], net.core.wmem_max)\n- 네트워크 대역폭 확인 및 병목 해소\n- TCP 혼잡 제어 알고리즘 조정 (예: BBR 사용)\n\n중요:\n- tcp_wmem의 max 값이 크더라도 wmem_max가 작으면 wmem_max가 제한이 됩니다\n- 두 값을 모두 적절히 설정해야 합니다\n- 버퍼가 너무 크면 메모리 사용량 증가 및 지연 시간 증가\n\n모니터링:\n- ss -i: 소켓의 Send-Q 값 확인\n- cat /proc/sys/net/ipv4/tcp_wmem: TCP 송신 버퍼 설정 확인\n- cat /proc/sys/net/core/wmem_max: 시스템 전체 송신 버퍼 최대값 확인',
+      functions: ['tcp_sendmsg()', 'tcp_write_xmit()'],
+      position: { x: 450, y: 1350 }
+    },
+    {
+      id: 'rst-port-closed',
+      label: 'TCP RST',
+      level: 'RST',
+      desc: '존재하지 않는 포트로의 연결 시도',
+      detailedDesc: '존재하지 않는 포트로 연결을 시도하면 서버가 RST 패킷을 전송합니다.\n\n발생 원인:\n- 클라이언트가 닫힌 포트로 연결 시도: nginx가 해당 포트에서 리스닝하지 않음\n- nginx가 중지되었거나 포트 바인딩 실패\n- 방화벽 규칙으로 인한 포트 차단 후 연결 시도\n- 잘못된 포트 번호로 연결 시도\n\n증상:\n- 클라이언트에서 "Connection refused" 에러\n- tcpdump에서 RST 패킷 확인\n- 클라이언트 연결 즉시 실패 (타임아웃 없음)\n- nginx 로그에 연결 시도 기록 없음\n\n해결 방법:\n- nginx가 올바른 포트에서 리스닝하는지 확인: ss -tlnp | grep nginx\n- nginx 설정 파일의 listen 지시어 확인\n- 방화벽 규칙 확인: iptables -L -n\n- nginx 프로세스 상태 확인: systemctl status nginx\n\n일반적인 시나리오:\n1. 클라이언트가 포트 80으로 SYN 전송\n2. 서버에 리스닝 소켓이 없음\n3. 커널이 RST 패킷 전송\n4. 클라이언트 연결 실패\n\n모니터링:\n- ss -tlnp: 리스닝 중인 포트 확인\n- tcpdump -i any "tcp[tcpflags] & tcp-rst != 0": RST 패킷 확인\n- netstat -an | grep RST: RST 상태 소켓 확인',
+      functions: ['tcp_v4_rcv()', 'tcp_send_active_reset()'],
+      position: { x: -200, y: 700 }
+    },
+    {
+      id: 'rst-tcp-error',
+      label: 'TCP RST',
+      level: 'RST',
+      desc: 'TCP 에러로 인한 RST 전송',
+      detailedDesc: 'TCP 계층에서 패킷 검증 실패 또는 연결 상태 오류 시 RST 패킷이 전송됩니다.\n\n발생 원인:\n- 잘못된 TCP 시퀀스 번호: 예상 범위를 벗어난 시퀀스 번호\n- TCP 체크섬 에러: 패킷이 손상된 경우\n- 존재하지 않는 연결로의 패킷: ESTABLISHED 상태가 아닌 연결\n- 잘못된 TCP 플래그 조합: SYN+FIN, SYN+RST 등 비정상적인 플래그\n- 타임아웃된 연결로 패킷 수신: 연결이 이미 종료된 상태\n\n증상:\n- 클라이언트에서 "Connection reset by peer" 에러\n- tcpdump에서 RST 패킷 확인\n- 연결이 갑자기 끊김\n- nginx 로그에 에러 기록\n\n해결 방법:\n- 네트워크 연결 안정성 확인: 패킷 손실, 지연 시간 확인\n- TCP 재전송 설정 확인: net.ipv4.tcp_retries2\n- 방화벽 규칙 확인: 패킷 조작 방지\n- nginx 타임아웃 설정 조정: keepalive_timeout 등\n\n일반적인 시나리오:\n1. 클라이언트가 ESTABLISHED 상태가 아닌 연결로 패킷 전송\n2. 서버가 연결 상태 확인\n3. 잘못된 상태로 판단하여 RST 전송\n4. 클라이언트 연결 강제 종료\n\n모니터링:\n- tcpdump -i any "tcp[tcpflags] & tcp-rst != 0": RST 패킷 확인\n- netstat -s | grep -i "resets": RST 통계 확인\n- ss -tn state established: ESTABLISHED 상태 소켓 확인',
+      functions: ['tcp_v4_rcv()', 'tcp_validate_incoming()', 'tcp_send_active_reset()'],
+      position: { x: 400, y: 1400 }
+    },
+    {
+      id: 'rst-accept-timeout',
+      label: 'TCP RST',
+      level: 'RST',
+      desc: 'Accept Queue 타임아웃으로 인한 RST',
+      detailedDesc: 'Accept Queue에서 오래 대기한 연결이 타임아웃되면 RST 패킷이 전송될 수 있습니다.\n\n발생 원인:\n- Accept Queue에서 오래 대기: nginx가 accept()를 충분히 빠르게 호출하지 못할 때\n- 클라이언트가 타임아웃으로 연결 종료 시도\n- 큐에서 대기 중인 연결이 너무 오래 유지될 때\n- nginx 워커 프로세스가 모두 바쁜 상태\n\n증상:\n- 클라이언트에서 연결 타임아웃 또는 "Connection reset"\n- ss -tn state listen: Recv-Q 값이 큐 크기에 근접\n- nginx 로그에 연결 수락 지연 기록\n\n해결 방법:\n- net.core.somaxconn 값 증가\n- nginx worker_connections 값 증가\n- nginx 워커 프로세스 수 조정\n- epoll 이벤트 처리 최적화\n- CPU 부하 감소\n\n모니터링:\n- ss -tn state listen: Recv-Q 값 확인\n- nginx access.log에서 연결 지연 패턴 분석',
+      functions: ['tcp_check_req()', 'inet_csk_reqsk_queue_drop()'],
+      position: { x: -450, y: 1200 }
+    },
+    
+    // nginx 노드 그룹 - 특정 이슈 노드 (SYN Flood, Accept 지연, Zero Window)
+    {
+      id: 'issue-syn-flood',
+      label: 'SYN Flood\n공격',
+      level: 'DROP',
+      desc: 'SYN Flood 공격으로 인한 서비스 거부',
+      detailedDesc: 'SYN Flood는 악의적인 클라이언트가 대량의 SYN 패킷을 전송하여 SYN Backlog Queue를 포화시켜 정상적인 연결을 차단하는 DDoS 공격입니다.\n\n공격 메커니즘:\n1. 공격자가 대량의 SYN 패킷을 서버로 전송\n2. 서버는 각 SYN에 대해 SYN-ACK를 전송하고 SYN Backlog Queue에 저장\n3. 공격자는 ACK를 보내지 않아 큐에 SYN_RCVD 상태 연결이 쌓임\n4. 큐가 가득 차면 정상적인 클라이언트의 연결 요청이 거부됨\n5. 서버 리소스(메모리, CPU) 고갈로 인한 서비스 거부\n\n발생 원인:\n- 악의적인 클라이언트가 대량의 SYN 패킷 전송\n- SYN Backlog Queue 크기 제한 (net.ipv4.tcp_max_syn_backlog)\n- SYN cookies가 비활성화된 경우\n- 공격자가 스푸핑된 IP 주소 사용 (ACK를 보낼 수 없음)\n\n증상:\n- 정상적인 클라이언트의 연결 실패: "Connection refused" 또는 타임아웃\n- ss -tn state syn-recv: SYN_RCVD 상태 소켓 수가 급격히 증가\n- SYN Backlog Queue 포화: tcp_max_syn_backlog 값에 근접\n- 서버 CPU 사용률 증가: SYN-ACK 패킷 생성 및 큐 관리\n- 메모리 사용량 증가: SYN_RCVD 상태 연결 구조체 저장\n- /proc/net/sockstat: TCPInErrs 카운터 급증\n\n해결 방법:\n\n1. SYN Cookies 활성화 (가장 효과적):\n   - net.ipv4.tcp_syncookies = 1 (기본값: 1)\n   - SYN Backlog Queue를 사용하지 않고 쿠키 기반으로 연결 처리\n   - 큐 오버플로우 시에도 정상 연결 허용\n   - 메모리 사용량 감소\n\n2. SYN Backlog Queue 크기 증가:\n   - net.ipv4.tcp_max_syn_backlog 값 증가 (기본값: 2048, 권장: 4096~8192)\n   - 더 많은 SYN_RCVD 상태 연결을 보관 가능\n   - 하지만 메모리 사용량 증가\n\n3. 연결 타임아웃 조정:\n   - net.ipv4.tcp_syn_retries: SYN 재전송 횟수 (기본값: 6)\n   - net.ipv4.tcp_synack_retries: SYN-ACK 재전송 횟수 (기본값: 5)\n   - 짧은 타임아웃으로 빠른 정리\n\n4. 방화벽 규칙:\n   - iptables를 사용한 rate limiting\n   - 예: iptables -A INPUT -p tcp --syn -m limit --limit 1/s -j ACCEPT\n   - 특정 IP 주소 차단\n\n5. nginx 설정:\n   - worker_connections 값 조정\n   - 워커 프로세스 수 조정\n   - accept() 처리 속도 향상\n\n6. 네트워크 레벨 방어:\n   - DDoS 방어 서비스 사용 (Cloudflare, AWS Shield 등)\n   - 로드 밸런서에서 SYN Flood 필터링\n\n중요:\n- SYN Cookies는 큐 오버플로우 시에도 정상 연결을 허용하지만, CPU 사용량이 약간 증가\n- SYN Flood 공격은 네트워크 레벨에서 차단하는 것이 가장 효과적\n- 정상적인 고부하 상황과 공격을 구분하는 모니터링이 중요\n\n모니터링:\n- ss -tn state syn-recv | wc -l: SYN_RCVD 상태 소켓 수 실시간 모니터링\n- watch -n 1 "ss -tn state syn-recv | wc -l": 1초마다 확인\n- cat /proc/sys/net/ipv4/tcp_max_syn_backlog: 현재 설정값 확인\n- cat /proc/sys/net/ipv4/tcp_syncookies: SYN Cookies 활성화 여부 확인\n- netstat -s | grep -i "SYNs to LISTEN": SYN 패킷 통계\n- tcpdump -i any "tcp[tcpflags] & tcp-syn != 0 and tcp[tcpflags] & tcp-ack == 0": SYN-only 패킷 확인\n- /proc/net/sockstat: TCPInErrs 카운터 모니터링',
+      functions: ['tcp_v4_conn_request()', 'inet_csk_reqsk_queue_hash_add()', 'cookie_v4_init_sequence()'],
+      position: { x: 650, y: 950 }
+    },
+    {
+      id: 'issue-accept-delay',
+      label: 'Accept\n지연',
+      level: 'DROP',
+      desc: 'Accept Queue에서의 연결 수락 지연',
+      detailedDesc: 'Accept Queue에서 완성된 연결이 nginx의 accept() 호출을 기다리는 시간이 길어지는 현상입니다. 이는 서버의 처리 용량을 초과하는 연결 요청이 들어올 때 발생합니다.\n\n발생 원인:\n\n1. nginx 워커 프로세스 부족:\n   - worker_processes 값이 너무 작음\n   - 모든 워커가 바쁜 상태로 accept()를 호출할 여유가 없음\n   - CPU 코어 수보다 적은 워커 프로세스\n\n2. worker_connections 제한:\n   - nginx의 worker_connections 값이 작음\n   - 각 워커가 처리할 수 있는 최대 연결 수 제한\n   - 기존 연결이 해제되지 않아 새 연결을 받을 수 없음\n\n3. epoll 이벤트 처리 지연:\n   - epoll_wait()에서 이벤트를 처리하는 시간이 오래 걸림\n   - HTTP 요청 처리 시간이 길어 accept() 호출이 지연\n   - I/O 블로킹으로 인한 이벤트 루프 지연\n\n4. Accept Queue 크기 부족:\n   - net.core.somaxconn 값이 작음\n   - listen()의 backlog 인자와 somaxconn 중 작은 값이 실제 크기\n   - 큐가 가득 차면 클라이언트의 ACK가 무시되어 연결 실패\n\n5. CPU 부하:\n   - 높은 CPU 사용률로 인한 컨텍스트 스위칭 지연\n   - 워커 프로세스가 스케줄링 대기\n   - 시스템 리소스 경쟁\n\n증상:\n- 클라이언트 연결 지연: 3-way handshake는 완료되었지만 연결이 느림\n- ss -tn state listen: Recv-Q 값이 큐 크기에 근접 (큐에 대기 중인 연결 수)\n- 클라이언트 타임아웃: 연결은 수립되었지만 데이터 전송 전 타임아웃\n- nginx 로그에 연결 수락 지연 기록\n- nginx 메트릭에서 연결 대기 시간 증가\n- 클라이언트에서 "Connection timeout" 또는 느린 응답\n\n해결 방법:\n\n1. nginx 워커 프로세스 수 증가:\n   - worker_processes auto; (CPU 코어 수에 맞춤)\n   - 또는 worker_processes 8; (명시적 설정)\n   - CPU 코어 수와 동일하거나 약간 더 많은 워커 사용\n\n2. worker_connections 값 증가:\n   - worker_connections 10240; (기본값: 512)\n   - 각 워커가 처리할 수 있는 최대 연결 수 증가\n   - 메모리 사용량 고려하여 적절히 설정\n\n3. Accept Queue 크기 증가:\n   - net.core.somaxconn 값 증가 (기본값: 4096, 권장: 8192~16384)\n   - nginx listen 지시어에 backlog 값 명시: listen 80 backlog=8192;\n   - somaxconn과 backlog 중 작은 값이 실제 크기\n\n4. epoll 이벤트 처리 최적화:\n   - HTTP 요청 처리 시간 단축\n   - 비동기 I/O 사용 (aio_read, aio_write)\n   - sendfile() 사용으로 zero-copy 전송\n   - keepalive 연결 활용으로 연결 수 감소\n\n5. CPU 부하 감소:\n   - 불필요한 모듈 비활성화\n   - 정적 파일은 별도 서버로 분리\n   - 캐싱 활용 (proxy_cache, fastcgi_cache)\n   - CPU 집약적 작업을 별도 프로세스로 분리\n\n6. 연결 풀 최적화:\n   - keepalive_timeout 조정: keepalive_timeout 65;\n   - keepalive_requests 증가: keepalive_requests 100;\n   - 기존 연결 재사용으로 새 연결 수 감소\n\n7. 모니터링 및 알림:\n   - Recv-Q 값 모니터링\n   - 큐 크기 대비 대기 연결 비율 추적\n   - 임계값 초과 시 알림 설정\n\n중요:\n- Accept Queue는 "완성된 연결"을 보관하는 큐입니다\n- 큐가 가득 차면 클라이언트의 ACK가 무시되어 연결이 실패합니다\n- 큐 크기를 너무 크게 설정하면 메모리 사용량이 증가하고 DDoS 공격에 취약해집니다\n- nginx의 accept() 처리 속도가 연결 요청 속도를 따라가지 못하면 큐에 쌓입니다\n\n성능 영향:\n- Accept 지연이 길어지면 클라이언트 경험이 저하됩니다\n- 큐에서 오래 대기한 연결은 타임아웃될 수 있습니다\n- 서버의 처리 용량을 초과하는 부하는 큐 크기만으로는 해결되지 않습니다\n\n모니터링:\n- ss -tn state listen: Recv-Q 값 확인 (큐에 대기 중인 연결 수)\n- watch -n 1 "ss -tn state listen": 1초마다 Recv-Q 값 모니터링\n- cat /proc/sys/net/core/somaxconn: 현재 설정값 확인\n- nginx access.log에서 연결 수락 시간 분석\n- nginx stub_status 모듈로 연결 통계 확인\n- netstat -s | grep -i "listen": LISTEN 소켓 통계',
+      functions: ['sys_accept()', 'inet_accept()', 'tcp_accept()', 'epoll_wait()'],
+      position: { x: -450, y: 1250 }
+    },
+    {
+      id: 'issue-zero-window',
+      label: 'Zero Window\n상태',
+      level: 'DROP',
+      desc: 'TCP 수신 윈도우가 0이 되어 전송 중단',
+      detailedDesc: 'Zero Window는 TCP 수신 버퍼가 가득 차서 수신 윈도우 크기가 0이 되고, 송신자가 더 이상 데이터를 전송할 수 없는 상태입니다. 이는 애플리케이션이 데이터를 읽는 속도가 네트워크에서 데이터가 도착하는 속도보다 느릴 때 발생합니다.\n\n발생 원인:\n\n1. TCP 수신 버퍼 포화:\n   - net.ipv4.tcp_rmem 또는 net.core.rmem_max 값이 작음\n   - 수신 버퍼가 가득 차서 더 이상 데이터를 받을 수 없음\n   - 실제 최대값 = min(net.ipv4.tcp_rmem[2], net.core.rmem_max)\n\n2. 애플리케이션 처리 속도 저하:\n   - nginx가 recv()/read()를 충분히 빠르게 호출하지 못함\n   - HTTP 요청 처리 시간이 길어 데이터 읽기가 지연\n   - CPU 부하로 인한 처리 지연\n   - I/O 블로킹으로 인한 읽기 지연\n\n3. 고속 네트워크 환경:\n   - 네트워크 대역폭이 애플리케이션 처리 속도를 초과\n   - 10Gbps 이상의 고속 네트워크에서 자주 발생\n   - 데이터 수신 속도가 읽기 속도를 초과\n\n4. 대용량 요청 처리:\n   - 큰 HTTP 요청 본문 처리 중 버퍼 포화\n   - 파일 업로드 등 대용량 데이터 처리\n   - client_body_buffer_size 설정이 작음\n\n5. TCP 흐름 제어:\n   - TCP는 수신 윈도우 크기만큼만 데이터를 전송\n   - 윈도우가 0이 되면 송신이 중단되고 윈도우 업데이트 대기\n   - 윈도우 프로브(Window Probe) 패킷으로 윈도우 상태 확인\n\n증상:\n- 네트워크 전송 속도 급격히 감소: 대역폭 활용도 저하\n- TCP 재전송 증가: 윈도우 프로브 패킷 재전송\n- ss -i: Recv-Q 값이 버퍼 크기에 근접 또는 버퍼 크기와 동일\n- tcpdump에서 Zero Window 패킷 확인: TCP 헤더의 윈도우 크기가 0\n- 클라이언트에서 느린 응답 또는 타임아웃\n- nginx에서 요청 처리 지연\n- TCP 흐름 제어로 인한 전송 속도 제한\n\n해결 방법:\n\n1. TCP 수신 버퍼 크기 증가:\n   - net.ipv4.tcp_rmem 값 증가 (min default max, 예: 4096 131072 6291456)\n   - net.core.rmem_max 값 증가 (tcp_rmem max와 함께 조정 필요)\n   - 실제 최대값 = min(net.ipv4.tcp_rmem[2], net.core.rmem_max)\n   - 두 값을 모두 적절히 설정해야 함\n   - 고속 네트워크에서는 더 큰 값 필요 (예: 10MB 이상)\n\n2. nginx 버퍼 크기 설정:\n   - client_body_buffer_size 증가: client_body_buffer_size 128k;\n   - proxy_buffer_size 증가: proxy_buffer_size 8k;\n   - proxy_buffers 증가: proxy_buffers 8 8k;\n   - 큰 요청 본문 처리 시 임시 파일 사용: client_body_in_file_only on;\n\n3. 애플리케이션 처리 속도 향상:\n   - HTTP 요청 처리 시간 단축\n   - 비동기 I/O 사용\n   - CPU 부하 감소\n   - I/O 블로킹 최소화\n\n4. TCP 윈도우 스케일링:\n   - net.ipv4.tcp_window_scaling = 1 (기본값: 1, 활성화 권장)\n   - 64KB 이상의 윈도우 크기 지원\n   - 고속 장거리 네트워크에서 필수\n\n5. TCP 버퍼 자동 조정:\n   - net.ipv4.tcp_moderate_rcvbuf = 1 (기본값: 1)\n   - 네트워크 상태에 따라 버퍼 크기 자동 조정\n   - 대역폭 지연 곱(BDP)에 맞춰 버퍼 크기 조정\n\n6. 네트워크 대역폭 확인:\n   - 실제 네트워크 대역폭 측정\n   - 버퍼 크기 = 대역폭 × RTT (Round Trip Time)\n   - 예: 10Gbps, RTT 10ms → 최소 12.5MB 버퍼 필요\n\n중요:\n- Zero Window는 TCP의 정상적인 흐름 제어 메커니즘입니다\n- 하지만 자주 발생하면 성능 저하를 의미합니다\n- 버퍼가 너무 작으면 대역폭을 충분히 활용할 수 없습니다\n- 버퍼가 너무 크면 메모리 사용량이 증가하고 지연 시간이 증가합니다\n- tcp_rmem의 max 값이 크더라도 rmem_max가 작으면 rmem_max가 제한이 됩니다\n\n성능 영향:\n- Zero Window 상태에서는 데이터 전송이 중단됩니다\n- 윈도우 프로브 패킷으로 윈도우 상태를 확인하지만 오버헤드가 발생합니다\n- 대역폭 활용도가 크게 감소하여 네트워크 성능이 저하됩니다\n- 특히 고속 네트워크에서 심각한 병목이 될 수 있습니다\n\n모니터링:\n- ss -i: 소켓의 Recv-Q 값 확인 (버퍼에 쌓인 데이터 양)\n- watch -n 1 "ss -i": 1초마다 Recv-Q 값 모니터링\n- tcpdump -i any "tcp[tcpflags] & tcp-window != 0": 윈도우 크기 확인\n- tcpdump -i any "tcp[14:2] == 0": Zero Window 패킷 확인\n- cat /proc/sys/net/ipv4/tcp_rmem: TCP 수신 버퍼 설정 확인\n- cat /proc/sys/net/core/rmem_max: 시스템 전체 수신 버퍼 최대값 확인\n- netstat -s | grep -i "zero window": Zero Window 통계\n- ss -o state established "( dport = :80 )": ESTABLISHED 소켓의 옵션 확인',
+      functions: ['tcp_rcv_established()', 'tcp_data_queue()', 'tcp_select_window()', 'tcp_send_window_probe()'],
+      position: { x: -450, y: 1450 }
+    },
+    
+    // nginx 노드 그룹 - 소켓 이슈 노드 (TIME_WAIT 폭증, CLOSE_WAIT, recv stuck, send block)
+    {
+      id: 'issue-time-wait',
+      label: 'TIME_WAIT\n폭증',
+      level: 'RST',
+      desc: 'TIME_WAIT 상태 소켓이 과도하게 증가하여 포트 고갈',
+      detailedDesc: 'TIME_WAIT 폭증은 연결 종료 후 TIME_WAIT 상태로 남아있는 소켓이 과도하게 증가하여 사용 가능한 포트가 부족해지는 현상입니다. 이는 고부하 서버에서 짧은 시간에 많은 연결을 처리할 때 자주 발생합니다.\n\n발생 원인:\n\n1. 짧은 연결 생명주기:\n   - HTTP/1.0 연결: 각 요청마다 새로운 연결 생성 및 종료\n   - Keep-Alive 비활성화: keepalive_timeout이 0이거나 매우 짧음\n   - 짧은 세션: 사용자가 빠르게 페이지를 이동하며 연결 종료\n   - API 호출: 각 API 요청마다 새로운 연결 생성\n\n2. 서버 측에서 먼저 종료:\n   - nginx가 HTTP 응답 후 즉시 close() 호출\n   - SO_LINGER 옵션으로 즉시 종료 설정\n   - 서버가 FIN을 먼저 보내면 TIME_WAIT 상태가 서버 측에 생성\n   - 클라이언트가 먼저 종료하면 TIME_WAIT는 클라이언트 측에 생성\n\n3. TIME_WAIT 대기 시간:\n   - 기본 2MSL (Maximum Segment Lifetime) 대기: 약 60초 (Linux 기본값)\n   - net.ipv4.tcp_fin_timeout: FIN_WAIT_2 상태 대기 시간 (기본값: 60초)\n   - TIME_WAIT 소켓은 2MSL 동안 유지되어 포트를 점유\n\n4. 포트 범위 제한:\n   - net.ipv4.ip_local_port_range: 사용 가능한 포트 범위 (기본값: 32768 60999)\n   - 약 28,000개의 포트만 사용 가능\n   - TIME_WAIT 소켓이 포트를 점유하면 새 연결에 사용할 포트 부족\n\n증상:\n- 새 연결 실패: "Cannot assign requested address" 또는 "Address already in use"\n- ss -tn state time-wait: TIME_WAIT 상태 소켓 수가 수천 개 이상\n- 포트 고갈: 사용 가능한 포트가 거의 없음\n- 서비스 성능 저하: 새 연결 수락 실패로 인한 요청 거부\n- netstat -an | grep TIME_WAIT | wc -l: TIME_WAIT 소켓 수 확인\n- ss -tn state time-wait | wc -l: TIME_WAIT 소켓 수 확인\n\n해결 방법:\n\n1. Keep-Alive 연결 활용 (가장 효과적):\n   - keepalive_timeout 증가: keepalive_timeout 65;\n   - keepalive_requests 증가: keepalive_requests 100;\n   - 동일한 연결을 재사용하여 새 연결 수 감소\n   - TIME_WAIT 소켓 수 대폭 감소\n\n2. SO_REUSEADDR 옵션:\n   - net.ipv4.tcp_tw_reuse = 1 (기본값: 0)\n   - TIME_WAIT 상태의 포트를 새 연결에 재사용\n   - 클라이언트 측에서만 효과적 (서버 측에서는 제한적)\n   - 타임스탬프 기반 검증으로 안전성 보장\n\n3. TIME_WAIT 소켓 빠른 정리:\n   - net.ipv4.tcp_tw_recycle = 0 (기본값: 0, 비활성화 권장)\n   - 주의: NAT 환경에서 문제 발생 가능, Linux 4.12+에서 제거됨\n   - 대신 tcp_tw_reuse 사용 권장\n\n4. 포트 범위 확장:\n   - net.ipv4.ip_local_port_range 확장: "echo \'10000 65535\' > /proc/sys/net/ipv4/ip_local_port_range"\n   - 더 많은 포트 사용 가능\n   - 하지만 근본적인 해결책은 아님\n\n5. 서버 측 종료 지연:\n   - 클라이언트가 먼저 종료하도록 유도\n   - HTTP 응답 후 즉시 close() 대신 keepalive 유지\n   - SO_LINGER 옵션 조정\n\n6. 연결 풀링:\n   - 애플리케이션 레벨에서 연결 풀 사용\n   - 데이터베이스 연결 풀, HTTP 클라이언트 연결 풀\n   - 연결 재사용으로 새 연결 수 감소\n\n7. 로드 밸런서 설정:\n   - 로드 밸런서에서 연결 재사용\n   - Upstream keepalive 설정\n   - 백엔드 서버로의 연결 재사용\n\n중요:\n- TIME_WAIT는 TCP의 정상적인 동작입니다\n- 마지막 ACK가 손실된 경우를 대비한 안전 메커니즘\n- TIME_WAIT 소켓 자체는 문제가 아니며, 과도한 증가가 문제입니다\n- Keep-Alive를 사용하면 TIME_WAIT 소켓 수를 크게 줄일 수 있습니다\n- tcp_tw_reuse는 클라이언트 측에서만 효과적이며, 서버 측에서는 제한적입니다\n\n성능 영향:\n- TIME_WAIT 폭증은 포트 고갈로 인한 새 연결 실패를 유발합니다\n- 서비스 가용성에 직접적인 영향을 미칩니다\n- 특히 고부하 서버에서 심각한 문제가 될 수 있습니다\n\n모니터링:\n- ss -tn state time-wait | wc -l: TIME_WAIT 소켓 수 확인\n- watch -n 1 "ss -tn state time-wait | wc -l": 1초마다 모니터링\n- ss -tn state time-wait: TIME_WAIT 소켓 상세 정보\n- netstat -an | grep TIME_WAIT | wc -l: TIME_WAIT 소켓 수 (구식 명령어)\n- cat /proc/sys/net/ipv4/ip_local_port_range: 포트 범위 확인\n- ss -tn state established | wc -l: ESTABLISHED 소켓 수와 비교\n- nginx access.log에서 연결 패턴 분석',
+      functions: ['tcp_time_wait()', 'tcp_twsk_destructor()', 'inet_twsk_hashdance()'],
+      position: { x: 400, y: 1600 }
+    },
+    {
+      id: 'issue-close-wait',
+      label: 'CLOSE_WAIT\n상태',
+      level: 'KERNEL',
+      desc: 'CLOSE_WAIT 상태 소켓이 누적되어 리소스 누수',
+      detailedDesc: 'CLOSE_WAIT는 상대방(클라이언트)이 연결을 종료했지만, 애플리케이션(nginx)이 close()를 호출하지 않아 소켓이 CLOSE_WAIT 상태로 남아있는 현상입니다. 이는 애플리케이션 버그나 리소스 누수를 의미합니다.\n\n발생 원인:\n\n1. 애플리케이션 버그:\n   - nginx가 close()를 호출하지 않음\n   - 예외 처리에서 close() 누락\n   - 에러 발생 시 소켓 정리 실패\n   - 메모리 누수로 인한 소켓 해제 실패\n\n2. 블로킹 I/O:\n   - recv()나 read()에서 블로킹되어 close() 호출 불가\n   - 무한 대기 상태로 진입\n   - 타임아웃 설정 부족\n   - 네트워크 에러로 인한 블로킹\n\n3. 이벤트 루프 문제:\n   - epoll 이벤트 처리 중 에러 발생\n   - 이벤트 핸들러에서 close() 누락\n   - 비동기 처리 중 예외 상황 미처리\n\n4. 프로세스 종료:\n   - 워커 프로세스가 비정상 종료\n   - SIGKILL로 강제 종료되어 정리되지 않음\n   - 크래시로 인한 소켓 정리 실패\n\nTCP 상태 전이:\n- ESTABLISHED → 상대방 FIN 수신 → CLOSE_WAIT\n- CLOSE_WAIT → 애플리케이션 close() 호출 → LAST_ACK\n- LAST_ACK → FIN 전송 및 ACK 수신 → CLOSED\n\n증상:\n- CLOSE_WAIT 소켓 수가 지속적으로 증가\n- ss -tn state close-wait: CLOSE_WAIT 상태 소켓 수 확인\n- 메모리 사용량 증가: 소켓 구조체가 해제되지 않음\n- 파일 디스크립터 누수: fd 테이블 포화 가능\n- 서비스 성능 저하: 리소스 고갈\n- 새 연결 수락 실패: 리소스 부족\n\n해결 방법:\n\n1. 애플리케이션 코드 수정:\n   - 모든 경로에서 close() 호출 보장\n   - try-finally 블록 사용\n   - 예외 처리에서 소켓 정리\n   - 리소스 관리 패턴 적용 (RAII)\n\n2. 타임아웃 설정:\n   - SO_RCVTIMEO 설정: 수신 타임아웃\n   - SO_SNDTIMEO 설정: 송신 타임아웃\n   - recv() 블로킹 방지\n   - 논블로킹 모드 사용\n\n3. nginx 설정:\n   - keepalive_timeout 설정: keepalive_timeout 65;\n   - 연결 타임아웃 관리\n   - worker_connections 제한으로 리소스 보호\n\n4. 모니터링 및 알림:\n   - CLOSE_WAIT 소켓 수 모니터링\n   - 임계값 초과 시 알림\n   - 로그 분석으로 패턴 파악\n\n5. 프로세스 관리:\n   - 정상 종료 프로세스 구현\n   - SIGTERM 신호 처리\n   - 종료 시 모든 소켓 정리\n\n6. 디버깅:\n   - lsof -p <pid>: 프로세스의 열린 파일 디스크립터 확인\n   - strace로 close() 호출 추적\n   - 코드 리뷰로 리소스 누수 확인\n\n중요:\n- CLOSE_WAIT는 애플리케이션 버그의 징후입니다\n- 정상적인 상황에서는 CLOSE_WAIT 상태가 오래 지속되지 않아야 합니다\n- CLOSE_WAIT 소켓이 누적되면 리소스 누수를 의미합니다\n- 애플리케이션 코드를 수정하여 근본 원인을 해결해야 합니다\n\n성능 영향:\n- CLOSE_WAIT 소켓은 메모리와 파일 디스크립터를 점유합니다\n- 누적되면 리소스 고갈로 인한 서비스 장애가 발생할 수 있습니다\n- 파일 디스크립터 테이블이 포화되면 새 연결을 수락할 수 없습니다\n\n모니터링:\n- ss -tn state close-wait | wc -l: CLOSE_WAIT 소켓 수 확인\n- watch -n 1 "ss -tn state close-wait | wc -l": 1초마다 모니터링\n- ss -tn state close-wait: CLOSE_WAIT 소켓 상세 정보\n- lsof -p <nginx_pid> | grep CLOSE_WAIT: nginx 프로세스의 CLOSE_WAIT 소켓\n- netstat -an | grep CLOSE_WAIT | wc -l: CLOSE_WAIT 소켓 수 (구식 명령어)\n- nginx error.log에서 관련 에러 확인\n- strace -p <pid> -e trace=close: close() 호출 추적',
+      functions: ['tcp_close()', 'inet_csk_clear_xmit_timer()', 'tcp_send_fin()'],
+      position: { x: 0, y: 1600 }
+    },
+    {
+      id: 'issue-recv-stuck',
+      label: 'recv()\nStuck',
+      level: 'RST',
+      desc: 'recv() 호출이 블로킹되어 응답하지 않음',
+      detailedDesc: 'recv() stuck은 recv() 또는 read() 시스템 콜이 블로킹되어 데이터를 읽지 못하고 무한 대기하는 현상입니다. 이는 네트워크 문제, 애플리케이션 버그, 또는 시스템 리소스 부족으로 인해 발생합니다.\n\n발생 원인:\n\n1. 네트워크 연결 문제:\n   - 네트워크 단절: 물리적 연결 끊김\n   - 방화벽 차단: 중간에 패킷 차단\n   - 라우팅 문제: 패킷이 목적지에 도달하지 못함\n   - 네트워크 지연: 매우 긴 지연 시간\n\n2. 상대방 문제:\n   - 클라이언트가 응답하지 않음: 크래시 또는 네트워크 문제\n   - 클라이언트가 데이터를 전송하지 않음\n   - 클라이언트가 FIN을 보내지 않고 연결 유지\n   - 타임아웃 설정이 없는 상태에서 대기\n\n3. TCP 수신 버퍼 문제:\n   - 수신 버퍼가 비어있음: 데이터가 도착하지 않음\n   - 버퍼에 데이터가 있지만 읽지 못함: 애플리케이션 버그\n   - Zero Window 상태: 버퍼가 가득 차서 더 이상 받을 수 없음\n\n4. 블로킹 모드:\n   - 소켓이 블로킹 모드로 설정됨: SO_NONBLOCK 미설정\n   - 데이터가 도착할 때까지 무한 대기\n   - 타임아웃이 설정되지 않음\n\n5. 시스템 리소스 부족:\n   - 메모리 부족: OOM (Out of Memory)\n   - CPU 부하: 스케줄링 지연\n   - 파일 디스크립터 부족\n\n증상:\n- 애플리케이션이 응답하지 않음: 요청 처리 중단\n- 프로세스가 블로킹 상태: TASK_UNINTERRUPTIBLE 또는 TASK_INTERRUPTIBLE\n- CPU 사용률은 낮지만 요청이 처리되지 않음\n- 클라이언트에서 타임아웃 발생\n- nginx 로그에 요청 처리 지연 기록\n- ss -i: Recv-Q 값이 0이지만 recv()가 블로킹\n\n해결 방법:\n\n1. 타임아웃 설정:\n   - SO_RCVTIMEO 설정: 수신 타임아웃\n   - setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));\n   - 블로킹 모드에서도 타임아웃 후 반환\n   - nginx: proxy_read_timeout, fastcgi_read_timeout 설정\n\n2. 논블로킹 모드 사용:\n   - SO_NONBLOCK 설정: 논블로킹 모드\n   - fcntl(sock, F_SETFL, O_NONBLOCK);\n   - recv()가 즉시 반환 (EAGAIN/EWOULDBLOCK)\n   - epoll과 함께 사용하여 이벤트 기반 처리\n\n3. 네트워크 연결 확인:\n   - ping으로 네트워크 연결 확인\n   - tcpdump로 패킷 흐름 확인\n   - 네트워크 지연 시간 측정\n   - 방화벽 규칙 확인\n\n4. Keep-Alive 설정:\n   - keepalive_timeout 설정: keepalive_timeout 65;\n   - TCP Keep-Alive 활성화: SO_KEEPALIVE\n   - 비활성 연결 감지 및 정리\n\n5. nginx 설정:\n   - proxy_read_timeout: proxy_read_timeout 60s;\n   - fastcgi_read_timeout: fastcgi_read_timeout 60s;\n   - uwsgi_read_timeout: uwsgi_read_timeout 60s;\n   - 읽기 타임아웃 설정으로 블로킹 방지\n\n6. 모니터링 및 디버깅:\n   - strace로 시스템 콜 추적: strace -p <pid>\n   - ss -i로 소켓 상태 확인\n   - tcpdump로 패킷 분석\n   - 프로세스 상태 확인: ps aux | grep nginx\n\n중요:\n- recv() stuck은 네트워크 문제나 애플리케이션 버그를 의미합니다\n- 타임아웃을 설정하면 블로킹을 방지할 수 있습니다\n- 논블로킹 모드와 epoll을 사용하면 더 효율적인 처리가 가능합니다\n- 네트워크 연결 상태를 정기적으로 확인해야 합니다\n\n성능 영향:\n- recv() stuck은 요청 처리를 완전히 중단시킵니다\n- 워커 프로세스가 블로킹되면 다른 요청도 처리할 수 없습니다\n- 서비스 가용성에 직접적인 영향을 미칩니다\n\n모니터링:\n- strace -p <pid>: 시스템 콜 추적 (recv() 호출 확인)\n- ss -i: 소켓 상태 및 Recv-Q 값 확인\n- watch -n 1 "ss -tn state established": ESTABLISHED 소켓 모니터링\n- tcpdump -i any host <client_ip>: 클라이언트와의 통신 확인\n- ps aux | grep nginx: nginx 프로세스 상태 확인\n- nginx access.log에서 요청 처리 시간 분석\n- netstat -an | grep ESTABLISHED: ESTABLISHED 연결 확인',
+      functions: ['sys_recv()', 'inet_recvmsg()', 'tcp_recvmsg()', 'sock_recvmsg()'],
+      position: { x: -450, y: 1550 }
+    },
+    {
+      id: 'issue-send-block',
+      label: 'send()\nBlock',
+      level: 'RST',
+      desc: 'send() 호출이 블로킹되어 데이터 전송 불가',
+      detailedDesc: 'send() block은 send() 또는 write() 시스템 콜이 블로킹되어 데이터를 전송하지 못하고 대기하는 현상입니다. 이는 TCP 송신 버퍼가 가득 차거나 네트워크 대역폭이 부족할 때 발생합니다.\n\n발생 원인:\n\n1. TCP 송신 버퍼 포화:\n   - 송신 버퍼가 가득 참: net.ipv4.tcp_wmem 또는 net.core.wmem_max 제한\n   - 애플리케이션이 send()를 호출하지만 버퍼에 공간이 없음\n   - TCP가 네트워크로 전송하는 속도가 send() 호출 속도보다 느림\n   - 실제 최대값 = min(net.ipv4.tcp_wmem[2], net.core.wmem_max)\n\n2. 네트워크 대역폭 부족:\n   - 네트워크 대역폭이 애플리케이션 전송 속도를 따라가지 못함\n   - 네트워크 혼잡: 패킷 손실 및 재전송\n   - 원격 호스트의 수신 속도가 느림\n   - 네트워크 지연 시간 증가\n\n3. TCP 흐름 제어:\n   - 원격 호스트의 수신 윈도우가 작음: Zero Window 상태\n   - TCP 혼잡 제어로 인한 전송 속도 제한\n   - 재전송으로 인한 버퍼 포화\n   - 네트워크 혼잡으로 인한 전송 제한\n\n4. 블로킹 모드:\n   - 소켓이 블로킹 모드로 설정됨: SO_NONBLOCK 미설정\n   - 버퍼에 공간이 생길 때까지 무한 대기\n   - 타임아웃이 설정되지 않음\n\n5. 대용량 데이터 전송:\n   - 큰 파일 전송: HTTP 응답 본문이 큼\n   - 버퍼 크기보다 큰 데이터 전송\n   - 여러 번의 send() 호출이 필요한 경우\n\n증상:\n- send() 호출이 블로킹되어 반환하지 않음\n- 애플리케이션이 응답하지 않음: 요청 처리 중단\n- 프로세스가 블로킹 상태: TASK_UNINTERRUPTIBLE 또는 TASK_INTERRUPTIBLE\n- ss -i: Send-Q 값이 버퍼 크기에 근접\n- 네트워크 전송 속도 저하\n- 클라이언트에서 느린 응답 또는 타임아웃\n- nginx 로그에 응답 전송 지연 기록\n\n해결 방법:\n\n1. TCP 송신 버퍼 크기 증가:\n   - net.ipv4.tcp_wmem 값 증가 (min default max, 예: 4096 16384 4194304)\n   - net.core.wmem_max 값 증가 (tcp_wmem max와 함께 조정 필요)\n   - 실제 최대값 = min(net.ipv4.tcp_wmem[2], net.core.wmem_max)\n   - 두 값을 모두 적절히 설정해야 함\n\n2. 타임아웃 설정:\n   - SO_SNDTIMEO 설정: 송신 타임아웃\n   - setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));\n   - 블로킹 모드에서도 타임아웃 후 반환\n   - nginx: proxy_send_timeout, fastcgi_send_timeout 설정\n\n3. 논블로킹 모드 사용:\n   - SO_NONBLOCK 설정: 논블로킹 모드\n   - fcntl(sock, F_SETFL, O_NONBLOCK);\n   - send()가 즉시 반환 (EAGAIN/EWOULDBLOCK)\n   - epoll과 함께 사용하여 이벤트 기반 처리\n   - 버퍼에 공간이 생기면 다시 send() 시도\n\n4. 네트워크 대역폭 확인:\n   - 실제 네트워크 대역폭 측정\n   - 네트워크 혼잡 확인\n   - 원격 호스트의 수신 속도 확인\n   - 네트워크 병목 해소\n\n5. nginx 설정:\n   - proxy_send_timeout: proxy_send_timeout 60s;\n   - fastcgi_send_timeout: fastcgi_send_timeout 60s;\n   - uwsgi_send_timeout: uwsgi_send_timeout 60s;\n   - 송신 타임아웃 설정으로 블로킹 방지\n   - sendfile() 사용: sendfile on; (zero-copy 전송)\n\n6. 대용량 데이터 전송 최적화:\n   - 청크 전송: 큰 데이터를 작은 청크로 분할\n   - 압축 사용: gzip, brotli 등\n   - 캐싱 활용: 정적 파일 캐싱\n   - CDN 사용: 대용량 파일은 CDN으로 전송\n\n7. TCP 혼잡 제어 조정:\n   - TCP 혼잡 제어 알고리즘 변경: net.ipv4.tcp_congestion_control = bbr\n   - BBR 알고리즘 사용: 고속 네트워크에서 효과적\n   - 대역폭 활용도 향상\n\n중요:\n- send() block은 TCP의 정상적인 흐름 제어 메커니즘입니다\n- 하지만 자주 발생하면 성능 저하를 의미합니다\n- 버퍼가 너무 작으면 대역폭을 충분히 활용할 수 없습니다\n- 논블로킹 모드와 epoll을 사용하면 더 효율적인 처리가 가능합니다\n- tcp_wmem의 max 값이 크더라도 wmem_max가 작으면 wmem_max가 제한이 됩니다\n\n성능 영향:\n- send() block은 요청 처리를 중단시킵니다\n- 워커 프로세스가 블로킹되면 다른 요청도 처리할 수 없습니다\n- 네트워크 대역폭 활용도가 감소합니다\n- 특히 고속 네트워크에서 심각한 병목이 될 수 있습니다\n\n모니터링:\n- strace -p <pid>: 시스템 콜 추적 (send() 호출 확인)\n- ss -i: 소켓 상태 및 Send-Q 값 확인\n- watch -n 1 "ss -i": 1초마다 Send-Q 값 모니터링\n- tcpdump -i any: 패킷 전송 확인\n- cat /proc/sys/net/ipv4/tcp_wmem: TCP 송신 버퍼 설정 확인\n- cat /proc/sys/net/core/wmem_max: 시스템 전체 송신 버퍼 최대값 확인\n- netstat -s | grep -i "segments retransmitted": 재전송 통계\n- nginx access.log에서 응답 전송 시간 분석',
+      functions: ['sys_send()', 'inet_sendmsg()', 'tcp_sendmsg()', 'sock_sendmsg()', 'tcp_write_xmit()'],
+      position: { x: 450, y: 1550 }
     }
   ],
   
@@ -549,7 +720,71 @@ const socketData = {
     { source: 'nginx-accept', target: 'new-socket' },
     { source: 'new-socket', target: 'data-transfer' },
     { source: 'data-transfer', target: 'tcp-close' },
-    { source: 'tcp-close', target: 'tcp-time-wait' }
+    { source: 'tcp-close', target: 'tcp-time-wait' },
+    
+    // 커널 큐 및 버퍼 연결 (nginx 관련)
+    // SYN Backlog Queue 연결
+    { source: 'tcp-listen', target: 'syn-backlog-queue' },
+    { source: 'client-syn', target: 'syn-backlog-queue' },
+    { source: 'syn-backlog-queue', target: 'tcp-syn-rcvd' },
+    { source: 'tcp-syn-rcvd', target: 'syn-backlog-queue' },
+    
+    // Accept Queue 연결
+    { source: 'tcp-listen', target: 'accept-queue' },
+    { source: 'client-ack', target: 'accept-queue' },
+    { source: 'accept-queue', target: 'tcp-established' },
+    { source: 'tcp-established', target: 'accept-queue' },
+    { source: 'accept-queue', target: 'nginx-accept' },
+    
+    // Receive Queue 연결
+    { source: 'new-socket', target: 'receive-queue' },
+    { source: 'receive-queue', target: 'data-transfer' },
+    { source: 'data-transfer', target: 'receive-queue' },
+    
+    // Send Queue 연결
+    { source: 'new-socket', target: 'send-queue' },
+    { source: 'send-queue', target: 'data-transfer' },
+    { source: 'data-transfer', target: 'send-queue' },
+    
+    // nginx 노드 그룹 - Packet Drop 및 RST 연결
+    { source: 'syn-backlog-queue', target: 'drop-syn-backlog' },
+    { source: 'client-syn', target: 'drop-syn-backlog' },
+    { source: 'accept-queue', target: 'drop-accept-queue' },
+    { source: 'client-ack', target: 'drop-accept-queue' },
+    { source: 'receive-queue', target: 'drop-receive-buffer' },
+    { source: 'data-transfer', target: 'drop-receive-buffer' },
+    { source: 'send-queue', target: 'drop-send-buffer' },
+    { source: 'data-transfer', target: 'drop-send-buffer' },
+    { source: 'tcp-bind', target: 'rst-port-closed' },
+    { source: 'tcp-listen-state', target: 'rst-port-closed' },
+    { source: 'data-transfer', target: 'rst-tcp-error' },
+    { source: 'new-socket', target: 'rst-tcp-error' },
+    { source: 'accept-queue', target: 'rst-accept-timeout' },
+    { source: 'tcp-established', target: 'rst-accept-timeout' },
+    
+    // nginx 노드 그룹 - 특정 이슈 연결 (SYN Flood, Accept 지연, Zero Window)
+    { source: 'syn-backlog-queue', target: 'issue-syn-flood' },
+    { source: 'client-syn', target: 'issue-syn-flood' },
+    { source: 'tcp-syn-rcvd', target: 'issue-syn-flood' },
+    { source: 'accept-queue', target: 'issue-accept-delay' },
+    { source: 'nginx-accept', target: 'issue-accept-delay' },
+    { source: 'tcp-established', target: 'issue-accept-delay' },
+    { source: 'receive-queue', target: 'issue-zero-window' },
+    { source: 'data-transfer', target: 'issue-zero-window' },
+    { source: 'new-socket', target: 'issue-zero-window' },
+    
+    // nginx 노드 그룹 - 소켓 이슈 연결 (TIME_WAIT 폭증, CLOSE_WAIT, recv stuck, send block)
+    { source: 'tcp-close', target: 'issue-time-wait' },
+    { source: 'tcp-time-wait', target: 'issue-time-wait' },
+    { source: 'data-transfer', target: 'issue-time-wait' },
+    { source: 'tcp-close', target: 'issue-close-wait' },
+    { source: 'data-transfer', target: 'issue-close-wait' },
+    { source: 'receive-queue', target: 'issue-recv-stuck' },
+    { source: 'data-transfer', target: 'issue-recv-stuck' },
+    { source: 'new-socket', target: 'issue-recv-stuck' },
+    { source: 'send-queue', target: 'issue-send-block' },
+    { source: 'data-transfer', target: 'issue-send-block' },
+    { source: 'new-socket', target: 'issue-send-block' }
   ]
 };
 
@@ -559,7 +794,9 @@ const LEVEL_COLORS = {
   'HISTORY': '#7c3aed',     // 보라색 - 역사
   'KERNEL': '#dc2626',      // 빨간색 - 커널 구조
   'LIFECYCLE': '#059669',   // 초록색 - 생명주기
-  'COMPARISON': '#ea580c'   // 주황색 - 비교
+  'COMPARISON': '#ea580c',  // 주황색 - 비교
+  'DROP': '#dc2626',        // 진한 빨간색 - 패킷 드롭
+  'RST': '#991b1b'          // 어두운 빨간색 - TCP RST
 };
 
 // Cytoscape 인스턴스 생성
@@ -602,6 +839,40 @@ const cy = cytoscape({
         'curve-style': 'bezier',
         'opacity': 0.7
       }
+    },
+    {
+      selector: 'node[level = "DROP"]',
+      style: {
+        'background-color': LEVEL_COLORS.DROP,
+        'shape': 'diamond',
+        'width': 120,
+        'height': 120
+      }
+    },
+    {
+      selector: 'node[level = "RST"]',
+      style: {
+        'background-color': LEVEL_COLORS.RST,
+        'shape': 'diamond',
+        'width': 120,
+        'height': 120
+      }
+    },
+    {
+      selector: 'edge[targetLevel = "DROP"]',
+      style: {
+        'line-color': LEVEL_COLORS.DROP,
+        'target-arrow-color': LEVEL_COLORS.DROP,
+        'line-style': 'dashed'
+      }
+    },
+    {
+      selector: 'edge[targetLevel = "RST"]',
+      style: {
+        'line-color': LEVEL_COLORS.RST,
+        'target-arrow-color': LEVEL_COLORS.RST,
+        'line-style': 'dashed'
+      }
     }
   ],
   
@@ -618,12 +889,18 @@ const cy = cytoscape({
       },
       position: node.position
     })),
-    edges: socketData.edges.map(edge => ({
-      data: {
-        source: edge.source,
-        target: edge.target
-      }
-    }))
+    edges: socketData.edges.map(edge => {
+      const sourceNode = socketData.nodes.find(n => n.id === edge.source);
+      const targetNode = socketData.nodes.find(n => n.id === edge.target);
+      return {
+        data: {
+          source: edge.source,
+          target: edge.target,
+          sourceLevel: sourceNode ? sourceNode.level : null,
+          targetLevel: targetNode ? targetNode.level : null
+        }
+      };
+    })
   },
   
   layout: {
@@ -641,7 +918,9 @@ const levelNames = {
   'HISTORY': '역사',
   'KERNEL': '커널 구조',
   'LIFECYCLE': '생명주기',
-  'COMPARISON': '비교'
+  'COMPARISON': '비교',
+  'DROP': '패킷 드롭',
+  'RST': 'TCP RST'
 };
 
 // 정보 패널 업데이트 함수
@@ -677,17 +956,124 @@ function updateInfoPanel(node) {
 cy.on('tap', 'node', (evt) => {
   const node = evt.target;
   updateInfoPanel(node);
+  
+  // 클릭된 노드와 연결된 모든 노드 찾기 (neighborhood)
+  const connectedNodes = node.neighborhood('node');
+  const highlightedNodes = connectedNodes.add(node); // 연결된 노드 + 클릭된 노드
+  
+  // 모든 노드 처리
+  cy.nodes().forEach(n => {
+    if (highlightedNodes.has(n)) {
+      // 강조된 노드: 붉은 윤곽선
+      if (n === node) {
+        n.style({
+          'border-width': 5,
+          'border-color': '#ef4444',
+          'background-color': n.data('color'),
+          'opacity': 1
+        });
+      } else {
+        n.style({
+          'border-width': 4,
+          'border-color': '#f87171',
+          'background-color': n.data('color'),
+          'opacity': 1
+        });
+      }
+    } else {
+      // 강조되지 않은 노드: 진회색
+      n.style({
+        'border-width': 2,
+        'border-color': '#fff',
+        'background-color': '#4b5563',
+        'opacity': 0.5
+      });
+    }
+  });
+  
+  // 모든 엣지 처리
+  cy.edges().forEach(e => {
+    const source = e.source();
+    const target = e.target();
+    const isHighlighted = highlightedNodes.has(source) || highlightedNodes.has(target);
+    
+    if (isHighlighted) {
+      // 강조된 엣지: 원래 색상 유지
+      const targetLevel = e.data('targetLevel');
+      if (targetLevel === 'DROP') {
+        e.style({
+          'line-color': LEVEL_COLORS.DROP,
+          'target-arrow-color': LEVEL_COLORS.DROP,
+          'opacity': 0.7
+        });
+      } else if (targetLevel === 'RST') {
+        e.style({
+          'line-color': LEVEL_COLORS.RST,
+          'target-arrow-color': LEVEL_COLORS.RST,
+          'opacity': 0.7
+        });
+      } else {
+        e.style({
+          'line-color': '#60a5fa',
+          'target-arrow-color': '#60a5fa',
+          'opacity': 0.7
+        });
+      }
+    } else {
+      // 강조되지 않은 엣지: 진회색
+      e.style({
+        'line-color': '#6b7280',
+        'target-arrow-color': '#6b7280',
+        'opacity': 0.3
+      });
+    }
+  });
 });
 
-// 배경 클릭 시 초기 메시지 표시
+// 배경 클릭 시 초기 메시지 표시 및 원래 색상으로 복원
 cy.on('tap', (evt) => {
   if (evt.target === cy) {
+    // 모든 노드를 원래 색상으로 복원
+    cy.nodes().forEach(n => {
+      n.style({
+        'border-width': 2,
+        'border-color': '#fff',
+        'background-color': n.data('color'),
+        'opacity': 1
+      });
+    });
+    
+    // 모든 엣지를 원래 색상으로 복원
+    cy.edges().forEach(e => {
+      const targetLevel = e.data('targetLevel');
+      if (targetLevel === 'DROP') {
+        e.style({
+          'line-color': LEVEL_COLORS.DROP,
+          'target-arrow-color': LEVEL_COLORS.DROP,
+          'opacity': 0.7
+        });
+      } else if (targetLevel === 'RST') {
+        e.style({
+          'line-color': LEVEL_COLORS.RST,
+          'target-arrow-color': LEVEL_COLORS.RST,
+          'opacity': 0.7
+        });
+      } else {
+        e.style({
+          'line-color': '#60a5fa',
+          'target-arrow-color': '#60a5fa',
+          'opacity': 0.7
+        });
+      }
+    });
+    
     info.innerHTML = `
       <h3>Socket이란 무엇인가</h3>
       <p class="desc" style="margin-bottom: 12px;">
         <a href="index.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block; margin-bottom: 8px;">네트워크 맵</a>
-        <a href="tutorial.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block;">네트워크 맵 실습 튜토리얼</a>
+        <a href="tutorial.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block; margin-bottom: 8px;">네트워크 맵 실습 튜토리얼</a>
         <a href="soket.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block; margin-bottom: 8px;">소켓 맵</a>
+        <a href="socket-tutorial.html" style="color: #60a5fa; text-decoration: none; font-weight: bold; border-bottom: 1px solid #60a5fa; display: block;">소켓 맵 실습 튜토리얼</a>
       </p>
       <p class="desc"><strong>핵심 메시지:</strong></p>
       <p class="desc">소켓은 통신용 파일이 아니라 커널 상태 머신의 핸들입니다.</p>

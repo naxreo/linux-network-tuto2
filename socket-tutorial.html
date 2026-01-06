@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>리눅스 Socket 실습 튜토리얼</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      line-height: 1.6;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #1a1a1a;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+    
+    .nav-link {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(26, 26, 26, 0.95);
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      z-index: 1000;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .nav-link a {
+      color: #60a5fa;
+      text-decoration: none;
+      font-weight: bold;
+      font-size: 14px;
+      margin: 0 8px;
+    }
+    
+    .nav-link a:hover {
+      color: #7dd3fc;
+    }
+    
+    h1 {
+      color: #7dd3fc;
+      border-bottom: 3px solid #2563eb;
+      padding-bottom: 10px;
+      margin-bottom: 30px;
+      font-size: 2.5em;
+    }
+    
+    h2 {
+      color: #60a5fa;
+      margin-top: 40px;
+      margin-bottom: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #333;
+      font-size: 2em;
+      scroll-margin-top: 80px;
+    }
+    
+    h3 {
+      color: #94a3b8;
+      margin-top: 30px;
+      margin-bottom: 15px;
+      font-size: 1.5em;
+    }
+    
+    h4 {
+      color: #9ca3af;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      font-size: 1.2em;
+    }
+    
+    p {
+      margin: 15px 0;
+      color: #d1d5db;
+    }
+    
+    pre {
+      background: #0f0f0f;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 15px;
+      overflow-x: auto;
+      margin: 20px 0;
+    }
+    
+    code {
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      color: #60a5fa;
+      background: rgba(96, 165, 250, 0.1);
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    
+    pre code {
+      color: #e5e5e5;
+      display: block;
+      background: transparent;
+      padding: 0;
+    }
+    
+    ul, ol {
+      margin: 15px 0;
+      padding-left: 30px;
+    }
+    
+    li {
+      margin: 8px 0;
+      color: #d1d5db;
+    }
+    
+    a {
+      color: #60a5fa;
+      text-decoration: none;
+    }
+    
+    a:hover {
+      color: #7dd3fc;
+      text-decoration: underline;
+    }
+    
+    strong {
+      color: #fbbf24;
+      font-weight: bold;
+    }
+    
+    hr {
+      border: none;
+      border-top: 1px solid #333;
+      margin: 40px 0;
+    }
+    
+    .toc {
+      background: #0f0f0f;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 20px;
+      margin: 30px 0;
+    }
+    
+    .toc h2 {
+      margin-top: 0;
+      border-top: none;
+      padding-top: 0;
+    }
+    
+    .toc ul {
+      list-style: none;
+      padding-left: 0;
+    }
+    
+    .toc li {
+      margin: 10px 0;
+    }
+    
+    .toc a {
+      color: #60a5fa;
+    }
+    
+    .warning {
+      background: rgba(220, 38, 38, 0.1);
+      border-left: 4px solid #dc2626;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    
+    .info {
+      background: rgba(59, 130, 246, 0.1);
+      border-left: 4px solid #3b82f6;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-link">
+    <a href="soket.html">← 소켓 맵</a>
+  </div>
+  
+  <div class="container">
+<h1>리눅스 Socket 실습 튜토리얼</h1>
+<p>이 튜토리얼은 Ubuntu 24.04 호스트에서 Socket의 개념, 구조, 동작 원리, 그리고 실제 장애 사례를 단계별로 실습할 수 있도록 구성되었습니다.</p>
+<p class="info"><strong>핵심 메시지:</strong> 소켓은 통신용 파일이 아니라 커널 상태 머신의 핸들입니다.</p>
+
+<h2 id="목차">목차</h2>
+<ol>
+<li><a href="#1-환경-구성">환경 구성</a></li>
+<li><a href="#2-socket의-개념-이해">Socket의 개념 이해</a></li>
+<li><a href="#3-socket-api-실습">Socket API 실습</a></li>
+<li><a href="#4-socket-상태-확인">Socket 상태 확인</a></li>
+<li><a href="#5-커널-구조-확인">커널 구조 확인</a></li>
+<li><a href="#6-tcp-socket-심층-분석">TCP Socket 심층 분석</a></li>
+<li><a href="#7-커널-큐-확인">커널 큐 확인</a></li>
+<li><a href="#8-장애-사례-실습">장애 사례 실습</a></li>
+<li><a href="#9-종합-실습">종합 실습</a></li>
+</ol>
+
+<hr>
+
+<h2 id="1-환경-구성">1. 환경 구성</h2>
+<h3>1.1 Ubuntu 24.04 호스트 준비</h3>
+<p>이 튜토리얼은 단일 Ubuntu 24.04 호스트에서 실행됩니다. 네트워크 네임스페이스를 사용하여 여러 가상 네트워크 환경을 구성할 수 있습니다.</p>
+
+<h3>1.2 필수 도구 설치</h3>
+<pre><code class="language-bash"># 시스템 업데이트
+sudo apt update && sudo apt upgrade -y
+
+# 네트워크 모니터링 도구
+sudo apt install -y tcpdump wireshark-common net-tools iproute2 ss
+
+# 개발 도구
+sudo apt install -y build-essential gcc g++ make
+
+# Python 및 개발 라이브러리
+sudo apt install -y python3 python3-pip python3-dev
+
+# 커널 헤더 (커널 구조 확인용)
+sudo apt install -y linux-headers-$(uname -r)
+
+# 기타 유틸리티
+sudo apt install -y curl wget htop iotop ethtool strace ltrace
+
+# eBPF 도구 (선택사항)
+sudo apt install -y bpfcc-tools bpftrace
+
+# nginx (서버 예시용)
+sudo apt install -y nginx
+</code></pre>
+
+<h3>1.3 네트워크 네임스페이스 설정 (선택사항)</h3>
+<p>두 개의 가상 네트워크 환경을 만들려면:</p>
+<pre><code class="language-bash"># 네트워크 네임스페이스 생성
+sudo ip netns add server
+sudo ip netns add client
+
+# veth 쌍 생성
+sudo ip link add veth0 type veth peer name veth1
+
+# 각 네임스페이스에 veth 연결
+sudo ip link set veth0 netns server
+sudo ip link set veth1 netns client
+
+# IP 주소 할당
+sudo ip netns exec server ip addr add 192.168.100.10/24 dev veth0
+sudo ip netns exec client ip addr add 192.168.100.20/24 dev veth1
+
+# 인터페이스 활성화
+sudo ip netns exec server ip link set veth0 up
+sudo ip netns exec client ip link set veth1 up
+
+# 연결 테스트
+sudo ip netns exec client ping -c 3 192.168.100.10
+</code></pre>
+
+<h3>1.4 nginx 설정 (서버 예시)</h3>
+<pre><code class="language-bash"># nginx 시작
+sudo systemctl start nginx
+sudo systemctl enable nginx
+
+# 기본 페이지 생성
+echo "Hello from Socket Tutorial" | sudo tee /var/www/html/index.html
+
+# nginx 상태 확인
+sudo systemctl status nginx
+</code></pre>
+
+<hr>
+
+<h2 id="2-socket의-개념-이해">2. Socket의 개념 이해</h2>
+<h3>2.1 이론</h3>
+<p><strong>Socket</strong>은 File Descriptor의 한 종류로, 커널 내부의 상태 머신(State Machine)을 제어하는 핸들(Handle)입니다.</p>
+<ul>
+<li>Regular File, Pipe, Socket은 모두 File Descriptor의 다른 "종류"입니다</li>
+<li>Socket은 파일처럼 보이지만 실제 파일이 아닙니다</li>
+<li>커널 내부의 struct socket과 struct sock 구조체로 관리됩니다</li>
+</ul>
+
+<h3>2.2 실습: File Descriptor 확인</h3>
+<h4>2.2.1 프로세스의 File Descriptor 확인</h4>
+<pre><code class="language-bash"># 현재 쉘의 File Descriptor 확인
+ls -l /proc/$$/fd
+
+# nginx 프로세스의 File Descriptor 확인
+sudo ls -l /proc/$(pgrep nginx | head -1)/fd
+
+# File Descriptor 타입 확인
+sudo file /proc/$(pgrep nginx | head -1)/fd/*
+</code></pre>
+
+<h3>2.3 실습: Socket vs File vs Pipe 비교</h3>
+<h4>2.3.1 Regular File 확인</h4>
+<pre><code class="language-bash"># 일반 파일 생성 및 File Descriptor 확인
+exec 3<> /tmp/test_file
+echo "test" >&3
+ls -l /proc/$$/fd/3
+file /proc/$$/fd/3
+exec 3>&-
+</code></pre>
+
+<h4>2.3.2 Pipe 확인</h4>
+<pre><code class="language-bash"># Pipe 생성 및 File Descriptor 확인
+mkfifo /tmp/test_pipe
+exec 3<> /tmp/test_pipe &
+PIPE_PID=$!
+ls -l /proc/$$/fd/3
+file /proc/$$/fd/3
+exec 3>&-
+kill $PIPE_PID 2>/dev/null
+rm /tmp/test_pipe
+</code></pre>
+
+<h4>2.3.3 Socket 확인</h4>
+<pre><code class="language-bash"># nginx의 LISTEN 소켓 확인
+sudo ss -tlnp | grep nginx
+sudo ls -l /proc/$(pgrep nginx | head -1)/fd/ | grep socket
+
+# Socket File Descriptor 타입 확인
+sudo file /proc/$(pgrep nginx | head -1)/fd/6
+</code></pre>
+
+<h3>2.4 실습: Socket의 종류 확인</h3>
+<pre><code class="language-bash"># 모든 소켓 확인
+ss -a
+
+# IPv4 소켓 (AF_INET)
+ss -4 -a
+
+# IPv6 소켓 (AF_INET6)
+ss -6 -a
+
+# Unix Domain Socket (AF_UNIX)
+ss -x -a
+
+# Netlink 소켓 (AF_NETLINK)
+ss -N -a
+</code></pre>
+
+<h3>2.5 실습: Socket의 File Descriptor 테이블 확인</h3>
+<pre><code class="language-bash"># 프로세스의 File Descriptor 테이블 확인
+cat /proc/$$/fdinfo/0
+
+# nginx 프로세스의 Socket File Descriptor 정보
+sudo cat /proc/$(pgrep nginx | head -1)/fdinfo/6
+
+# Socket의 상세 정보
+sudo ss -i -e -p | grep nginx
+</code></pre>
+
+<hr>
+
+<h2 id="3-socket-api-실습">3. Socket API 실습</h2>
+<h3>3.1 이론</h3>
+<p>Socket API는 커널의 Socket 자원을 제어하는 시스템 콜입니다. 주요 함수:</p>
+<ul>
+<li><code>socket()</code>: Socket 생성</li>
+<li><code>bind()</code>: 주소 바인딩</li>
+<li><code>listen()</code>: 연결 대기 시작</li>
+<li><code>accept()</code>: 연결 수락</li>
+<li><code>connect()</code>: 연결 요청</li>
+<li><code>send()/recv()</code>, <code>read()/write()</code>: 데이터 송수신</li>
+<li><code>close()</code>: Socket 종료</li>
+</ul>
+
+<h3>3.2 실습: 간단한 Socket 서버 작성</h3>
+<h4>3.2.1 Python Socket 서버 작성</h4>
+<pre><code class="language-bash">cat > /tmp/socket_server.py << 'EOF'
+#!/usr/bin/env python3
+import socket
+import sys
+
+# Socket 생성
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+print(f"[1] socket() 호출: fd={sock.fileno()}")
+
+# 주소 재사용 옵션
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+# 바인딩
+server_address = ('0.0.0.0', 8888)
+sock.bind(server_address)
+print(f"[2] bind() 호출: {server_address}")
+
+# 리스닝
+sock.listen(5)
+print(f"[3] listen() 호출: backlog=5")
+
+# Socket 상태 확인
+import subprocess
+result = subprocess.run(['ss', '-tlnp'], capture_output=True, text=True)
+print(f"\nSocket 상태:")
+print(result.stdout)
+
+# 연결 수락
+print("\n[4] accept() 대기 중...")
+connection, client_address = sock.accept()
+print(f"[5] accept() 완료: {client_address}")
+
+# 데이터 수신
+data = connection.recv(1024)
+print(f"[6] recv() 수신: {data.decode()}")
+
+# 데이터 송신
+connection.sendall(b"Hello from server")
+print(f"[7] send() 송신 완료")
+
+# 연결 종료
+connection.close()
+print(f"[8] close() 호출")
+sock.close()
+EOF
+
+chmod +x /tmp/socket_server.py
+</code></pre>
+
+<h4>3.2.2 Python Socket 클라이언트 작성</h4>
+<pre><code class="language-bash">cat > /tmp/socket_client.py << 'EOF'
+#!/usr/bin/env python3
+import socket
+import time
+
+# Socket 생성
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+print(f"[1] socket() 호출: fd={sock.fileno()}")
+
+# 연결
+server_address = ('127.0.0.1', 8888)
+print(f"[2] connect() 호출: {server_address}")
+sock.connect(server_address)
+print(f"[3] connect() 완료")
+
+# 데이터 송신
+sock.sendall(b"Hello from client")
+print(f"[4] send() 송신 완료")
+
+# 데이터 수신
+data = sock.recv(1024)
+print(f"[5] recv() 수신: {data.decode()}")
+
+# 연결 종료
+sock.close()
+print(f"[6] close() 호출")
+EOF
+
+chmod +x /tmp/socket_client.py
+</code></pre>
+
+<h3>3.3 실습: Socket Lifecycle 추적</h3>
+<h4>3.3.1 서버 실행 및 추적</h4>
+<pre><code class="language-bash"># 서버를 백그라운드로 실행
+python3 /tmp/socket_server.py &
+SERVER_PID=$!
+
+# 잠시 대기
+sleep 1
+
+# 클라이언트 실행
+python3 /tmp/socket_client.py
+
+# 서버 종료 대기
+wait $SERVER_PID 2>/dev/null
+</code></pre>
+
+<h3>3.4 실습: strace로 시스템 콜 추적</h3>
+<pre><code class="language-bash"># 서버를 strace로 추적
+strace -e trace=socket,bind,listen,accept,recv,send,close -f python3 /tmp/socket_server.py &
+SERVER_PID=$!
+
+sleep 1
+
+# 클라이언트 실행
+python3 /tmp/socket_client.py
+
+# 서버 종료
+kill $SERVER_PID 2>/dev/null
+</code></pre>
+
+<h3>3.5 실습: send/recv vs read/write 비교</h3>
+<h4>3.5.1 send/recv 사용</h4>
+<pre><code class="language-bash">cat > /tmp/test_sendrecv.py << 'EOF'
+#!/usr/bin/env python3
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect(('127.0.0.1', 8888))
+sock.send(b"test")  # send() 사용
+data = sock.recv(1024)  # recv() 사용
+sock.close()
+EOF
+</code></pre>
+
+<h4>3.5.2 read/write 사용</h4>
+<pre><code class="language-bash">cat > /tmp/test_readwrite.py << 'EOF'
+#!/usr/bin/env python3
+import socket
+import os
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect(('127.0.0.1', 8888))
+os.write(sock.fileno(), b"test")  # write() 사용
+data = os.read(sock.fileno(), 1024)  # read() 사용
+sock.close()
+EOF
+</code></pre>
+
+<h4>3.5.3 strace로 비교</h4>
+<pre><code class="language-bash"># send/recv 추적
+strace -e trace=send,recv python3 /tmp/test_sendrecv.py 2>&1 | grep -E "send|recv"
+
+# read/write 추적
+strace -e trace=read,write python3 /tmp/test_readwrite.py 2>&1 | grep -E "read|write"
+</code></pre>
+
+<h3>3.6 실습: Blocking vs Non-blocking</h3>
+<h4>3.6.1 Blocking Socket</h4>
+<pre><code class="language-bash">cat > /tmp/test_blocking.py << 'EOF'
+#!/usr/bin/env python3
+import socket
+import time
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.settimeout(None)  # Blocking 모드 (기본값)
+print("Blocking 모드: recv()는 데이터가 올 때까지 대기")
+
+# 서버가 없으면 블로킹됨
+try:
+    sock.connect(('127.0.0.1', 9999))
+    sock.recv(1024)  # 블로킹
+except Exception as e:
+    print(f"에러: {e}")
+sock.close()
+EOF
+</code></pre>
+
+<h4>3.6.2 Non-blocking Socket</h4>
+<pre><code class="language-bash">cat > /tmp/test_nonblocking.py << 'EOF'
+#!/usr/bin/env python3
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setblocking(False)  # Non-blocking 모드
+print("Non-blocking 모드: recv()는 즉시 반환 (EAGAIN)")
+
+try:
+    sock.connect(('127.0.0.1', 9999))
+except BlockingIOError:
+    print("connect()가 즉시 반환 (EINPROGRESS)")
+
+try:
+    data = sock.recv(1024)
+except BlockingIOError:
+    print("recv()가 즉시 반환 (EAGAIN/EWOULDBLOCK)")
+sock.close()
+EOF
+
+python3 /tmp/test_nonblocking.py
+</code></pre>
+
+<hr>
+
+<h2 id="4-socket-상태-확인">4. Socket 상태 확인</h2>
+<h3>4.1 이론</h3>
+<p>Socket의 상태는 커널 내부에서 관리되며, <code>ss</code>, <code>netstat</code>, <code>/proc/net/tcp</code> 등을 통해 확인할 수 있습니다.</p>
+
+<h3>4.2 실습: ss 명령어로 Socket 상태 확인</h3>
+<h4>4.2.1 기본 Socket 상태 확인</h4>
+<pre><code class="language-bash"># 모든 소켓 확인
+ss -a
+
+# TCP 소켓만 확인
+ss -t -a
+
+# LISTEN 상태 소켓 확인
+ss -tln
+
+# ESTABLISHED 연결 확인
+ss -tn state established
+
+# TIME_WAIT 상태 확인
+ss -tn state time-wait
+
+# CLOSE_WAIT 상태 확인
+ss -tn state close-wait
+</code></pre>
+
+<h4>4.2.2 Socket 상세 정보 확인</h4>
+<pre><code class="language-bash"># Socket의 내부 정보 확인
+ss -i
+
+# 프로세스 정보 포함
+ss -tnp
+
+# 모든 정보 (상세)
+ss -i -e -p
+
+# 특정 포트의 소켓 확인
+ss -tlnp | grep :80
+</code></pre>
+
+<h3>4.3 실습: /proc/net/tcp로 커널 상태 확인</h3>
+<pre><code class="language-bash"># /proc/net/tcp 내용 확인
+cat /proc/net/tcp | head -20
+
+# 각 필드 의미:
+# sl: 소켓 슬롯 번호
+# local_address: 로컬 주소 (IP:Port, 16진수)
+# rem_address: 원격 주소 (IP:Port, 16진수)
+# st: 상태 (0A=LISTEN, 01=ESTABLISHED 등)
+# tx_queue: 송신 큐 크기
+# rx_queue: 수신 큐 크기
+# tr: 타이머 정보
+# tm->when: 타임아웃 정보
+# retrnsmt: 재전송 횟수
+# uid: 사용자 ID
+# timeout: 타임아웃
+# inode: inode 번호
+
+# 16진수 주소를 10진수로 변환하는 스크립트
+cat > /tmp/parse_tcp.py << 'EOF'
+#!/usr/bin/env python3
+import sys
+
+def hex_to_ip_port(hex_str):
+    if hex_str == '00000000:0000':
+        return '0.0.0.0:0'
+    ip_hex, port_hex = hex_str.split(':')
+    ip = '.'.join(str(int(ip_hex[i:i+2], 16)) for i in range(6, -1, -2))
+    port = int(port_hex, 16)
+    return f"{ip}:{port}"
+
+def state_to_name(state_hex):
+    states = {
+        '0A': 'LISTEN',
+        '01': 'ESTABLISHED',
+        '06': 'TIME_WAIT',
+        '08': 'CLOSE_WAIT',
+        '02': 'SYN_SENT',
+        '03': 'SYN_RECV',
+        '04': 'FIN_WAIT1',
+        '05': 'FIN_WAIT2',
+        '07': 'CLOSE',
+        '09': 'LAST_ACK',
+        '0B': 'CLOSING'
+    }
+    return states.get(state_hex, f'UNKNOWN({state_hex})')
+
+print("  sl  local_address        remote_address       st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode")
+print("-" * 100)
+
+with open('/proc/net/tcp', 'r') as f:
+    lines = f.readlines()[1:]  # 헤더 제외
+    for line in lines[:10]:  # 처음 10개만
+        parts = line.split()
+        if len(parts) >= 4:
+            local = hex_to_ip_port(parts[1])
+            remote = hex_to_ip_port(parts[2])
+            state = state_to_name(parts[3])
+            print(f"{parts[0]:>4} {local:20} {remote:20} {state:15} {parts[4]:>8} {parts[5]:>8} {parts[6]:>3} {parts[7]:>8} {parts[8]:>8} {parts[9]:>4} {parts[10]:>7} {parts[11]}")
+EOF
+
+chmod +x /tmp/parse_tcp.py
+sudo python3 /tmp/parse_tcp.py
+</code></pre>
+
+<h3>4.4 실습: Socket 통계 확인</h3>
+<pre><code class="language-bash"># Socket 통계 요약
+ss -s
+
+# 더 자세한 통계
+cat /proc/net/sockstat
+
+# IPv6 통계
+cat /proc/net/sockstat6
+
+# Socket 메모리 사용량
+cat /proc/net/sockstat | grep -E "TCP|UDP"
+</code></pre>
+
+<h3>4.5 실습: 실시간 Socket 모니터링</h3>
+<pre><code class="language-bash"># 실시간 Socket 상태 모니터링
+watch -n 1 'ss -tn state established | wc -l'
+
+# 실시간 Socket 통계
+watch -n 1 'ss -s'
+
+# 특정 포트의 연결 모니터링
+watch -n 1 'ss -tn state established "dst :80"'
+</code></pre>
+
+<hr>
+
+<h2 id="5-커널-구조-확인">5. 커널 구조 확인</h2>
+<h3>5.1 이론</h3>
+<p>Linux 커널에서 Socket은 두 가지 주요 구조체로 관리됩니다:</p>
+<ul>
+<li><strong>struct socket</strong>: VFS와의 인터페이스, 파일 디스크립터와 연결</li>
+<li><strong>struct sock</strong>: 프로토콜별 실제 구현 (TCP/UDP 등)</li>
+</ul>
+
+<h3>5.2 실습: Socket 구조체 정보 확인</h3>
+<h4>5.2.1 /proc 파일 시스템을 통한 확인</h4>
+<pre><code class="language-bash"># Socket의 inode 정보 확인
+sudo ls -l /proc/$(pgrep nginx | head -1)/fd/ | grep socket
+
+# Socket의 상세 정보 (ss 사용)
+sudo ss -i -e -p | grep nginx | head -1
+
+# Socket의 큐 정보 확인
+sudo ss -i | grep -A 5 nginx
+</code></pre>
+
+<h3>5.3 실습: Socket 메모리 사용량 확인</h3>
+<pre><code class="language-bash"># Socket 통계에서 메모리 사용량 확인
+cat /proc/net/sockstat
+
+# TCP 소켓 메모리 사용량
+cat /proc/net/sockstat | grep TCP
+
+# 각 소켓의 메모리 사용량 (ss 사용)
+sudo ss -i -m | head -20
+</code></pre>
+
+<h3>5.4 실습: Socket의 큐 상태 확인</h3>
+<pre><code class="language-bash"># Socket의 수신/송신 큐 확인
+ss -i
+
+# 더 자세한 큐 정보
+ss -i -e
+
+# 특정 소켓의 큐 정보
+sudo ss -i -n 'dst :80' | head -5
+
+# 큐 크기 확인
+sudo ss -i | grep -E "Recv-Q|Send-Q"
+</code></pre>
+
+<h3>5.5 실습: 커널 소스 코드 참조 (개념 확인)</h3>
+<p class="info">실제 커널 소스 코드를 확인하려면:</p>
+<pre><code class="language-bash"># 커널 소스 다운로드 (선택사항)
+# sudo apt install -y linux-source
+# cd /usr/src/linux-source-$(uname -r | cut -d- -f1)
+
+# 또는 온라인에서 확인:
+# https://elixir.bootlin.com/linux/latest/source/include/linux/socket.h
+# https://elixir.bootlin.com/linux/latest/source/include/net/sock.h
+
+# struct socket 정의 위치: include/linux/socket.h
+# struct sock 정의 위치: include/net/sock.h
+</code></pre>
+
+<hr>
+
+<h2 id="6-tcp-socket-심층-분석">6. TCP Socket 심층 분석</h2>
+<h3>6.1 이론</h3>
+<p>TCP는 "프로토콜"이 아니라 "상태 머신"입니다. TCP Socket은 여러 상태를 거치며 전이합니다:</p>
+<ul>
+<li>CLOSED → LISTEN → SYN_RCVD → ESTABLISHED → FIN_WAIT_1 → FIN_WAIT_2 → TIME_WAIT → CLOSED</li>
+</ul>
+
+<h3>6.2 실습: TCP 3-way Handshake 확인</h3>
+<h4>6.2.1 서버 준비</h4>
+<pre><code class="language-bash"># nginx가 실행 중인지 확인
+sudo systemctl status nginx
+
+# LISTEN 소켓 확인
+sudo ss -tlnp | grep :80
+</code></pre>
+
+<h4>6.2.2 tcpdump로 3-way Handshake 캡처</h4>
+<pre><code class="language-bash"># tcpdump로 SYN, SYN-ACK, ACK 패킷 캡처
+sudo tcpdump -i any -n 'tcp port 80 and (tcp[tcpflags] & tcp-syn != 0 or tcp[tcpflags] & tcp-ack != 0)' &
+TCPDUMP_PID=$!
+
+# 클라이언트에서 연결
+curl http://localhost/
+
+# tcpdump 종료
+sudo kill $TCPDUMP_PID
+</code></pre>
+
+<h3>6.3 실습: TCP 상태 전이 추적</h3>
+<h4>6.3.1 상태 전이 모니터링 스크립트</h4>
+<pre><code class="language-bash">cat > /tmp/monitor_tcp_states.sh << 'EOF'
+#!/bin/bash
+
+echo "=== TCP 상태별 소켓 수 ==="
+echo "LISTEN:     $(ss -tn state listen | wc -l)"
+echo "SYN-SENT:   $(ss -tn state syn-sent | wc -l)"
+echo "SYN-RECV:   $(ss -tn state syn-recv | wc -l)"
+echo "ESTABLISHED: $(ss -tn state established | wc -l)"
+echo "FIN-WAIT-1: $(ss -tn state fin-wait-1 | wc -l)"
+echo "FIN-WAIT-2: $(ss -tn state fin-wait-2 | wc -l)"
+echo "CLOSE-WAIT: $(ss -tn state close-wait | wc -l)"
+echo "LAST-ACK:   $(ss -tn state last-ack | wc -l)"
+echo "CLOSING:    $(ss -tn state closing | wc -l)"
+echo "TIME-WAIT:  $(ss -tn state time-wait | wc -l)"
+EOF
+
+chmod +x /tmp/monitor_tcp_states.sh
+
+# 실시간 모니터링
+watch -n 1 /tmp/monitor_tcp_states.sh
+</code></pre>
+
+<h3>6.4 실습: TCP 윈도우 크기 확인</h3>
+<pre><code class="language-bash"># TCP 윈도우 크기 확인
+ss -i | grep -E "cwnd|ssthresh"
+
+# 더 자세한 정보
+ss -i -e | grep -E "cwnd|ssthresh|rtt"
+
+# 특정 연결의 윈도우 정보
+sudo ss -i -n 'dst :80' | head -1
+</code></pre>
+
+<h3>6.5 실습: TCP 버퍼 크기 확인 및 조정</h3>
+<h4>6.5.1 현재 TCP 버퍼 설정 확인</h4>
+<pre><code class="language-bash"># TCP 수신 버퍼 설정
+cat /proc/sys/net/ipv4/tcp_rmem
+
+# TCP 송신 버퍼 설정
+cat /proc/sys/net/ipv4/tcp_wmem
+
+# 시스템 전체 버퍼 최대값
+cat /proc/sys/net/core/rmem_max
+cat /proc/sys/net/core/wmem_max
+
+# 기본 버퍼 크기
+cat /proc/sys/net/core/rmem_default
+cat /proc/sys/net/core/wmem_default
+</code></pre>
+
+<h4>6.5.2 TCP 버퍼 크기 조정 (임시)</h4>
+<pre><code class="language-bash"># TCP 수신 버퍼 증가 (min default max)
+sudo sysctl -w net.ipv4.tcp_rmem="4096 131072 6291456"
+
+# TCP 송신 버퍼 증가
+sudo sysctl -w net.ipv4.tcp_wmem="4096 16384 4194304"
+
+# 시스템 전체 최대값 증가
+sudo sysctl -w net.core.rmem_max=6291456
+sudo sysctl -w net.core.wmem_max=4194304
+
+# 확인
+sysctl net.ipv4.tcp_rmem
+sysctl net.ipv4.tcp_wmem
+</code></pre>
+
+<h3>6.6 실습: TCP 혼잡 제어 알고리즘 확인</h3>
+<pre><code class="language-bash"># 현재 사용 중인 혼잡 제어 알고리즘
+sysctl net.ipv4.tcp_congestion_control
+
+# 사용 가능한 알고리즘 목록
+cat /proc/sys/net/ipv4/tcp_available_congestion_control
+
+# 알고리즘 변경 (예: BBR)
+sudo sysctl -w net.ipv4.tcp_congestion_control=bbr
+
+# 변경 확인
+sysctl net.ipv4.tcp_congestion_control
+</code></pre>
+
+<hr>
+
+<h2 id="7-커널-큐-확인">7. 커널 큐 확인</h2>
+<h3>7.1 이론</h3>
+<p>Socket은 여러 종류의 큐를 사용하여 데이터를 버퍼링합니다:</p>
+<ul>
+<li><strong>Receive Queue (sk_receive_queue)</strong>: 수신된 데이터 버퍼</li>
+<li><strong>Send Queue (sk_write_queue)</strong>: 전송 대기 데이터 버퍼</li>
+<li><strong>Accept Queue</strong>: 완성된 연결 대기 큐 (서버 전용)</li>
+<li><strong>SYN Backlog Queue</strong>: SYN_RCVD 상태 연결 대기 큐 (서버 전용)</li>
+</ul>
+
+<h3>7.2 실습: Receive Queue 확인</h3>
+<pre><code class="language-bash"># Socket의 수신 큐 확인
+ss -i | grep -E "Recv-Q"
+
+# 더 자세한 정보
+ss -i -e | grep -E "Recv-Q"
+
+# 특정 소켓의 수신 큐
+sudo ss -i -n 'dst :80' | head -1
+
+# 수신 버퍼 설정 확인
+cat /proc/sys/net/ipv4/tcp_rmem
+cat /proc/sys/net/core/rmem_max
+</code></pre>
+
+<h3>7.3 실습: Send Queue 확인</h3>
+<pre><code class="language-bash"># Socket의 송신 큐 확인
+ss -i | grep -E "Send-Q"
+
+# 더 자세한 정보
+ss -i -e | grep -E "Send-Q"
+
+# 특정 소켓의 송신 큐
+sudo ss -i -n 'dst :80' | head -1
+
+# 송신 버퍼 설정 확인
+cat /proc/sys/net/ipv4/tcp_wmem
+cat /proc/sys/net/core/wmem_max
+</code></pre>
+
+<h3>7.4 실습: Accept Queue 확인</h3>
+<h4>7.4.1 Accept Queue 크기 확인</h4>
+<pre><code class="language-bash"># somaxconn 확인 (Accept Queue 최대 크기)
+sysctl net.core.somaxconn
+
+# LISTEN 소켓의 Accept Queue 상태 확인
+sudo ss -tln | grep LISTEN
+
+# Accept Queue에 대기 중인 연결 수 확인
+sudo ss -tn state listen | grep -E "Recv-Q"
+
+# nginx의 backlog 설정 확인
+sudo ss -tlnp | grep nginx
+</code></pre>
+
+<h4>7.4.2 Accept Queue 모니터링</h4>
+<pre><code class="language-bash">cat > /tmp/monitor_accept_queue.sh << 'EOF'
+#!/bin/bash
+
+echo "=== Accept Queue 모니터링 ==="
+echo "somaxconn: $(sysctl -n net.core.somaxconn)"
+echo ""
+echo "LISTEN 소켓의 Recv-Q (Accept Queue에 대기 중인 연결 수):"
+sudo ss -tln | grep LISTEN | awk '{print $2, $4}'
+EOF
+
+chmod +x /tmp/monitor_accept_queue.sh
+
+# 실시간 모니터링
+watch -n 1 /tmp/monitor_accept_queue.sh
+</code></pre>
+
+<h3>7.5 실습: SYN Backlog Queue 확인</h3>
+<h4>7.5.1 SYN Backlog 설정 확인</h4>
+<pre><code class="language-bash"># tcp_max_syn_backlog 확인
+sysctl net.ipv4.tcp_max_syn_backlog
+
+# SYN_RCVD 상태 소켓 확인
+ss -tn state syn-recv
+
+# SYN Backlog 큐에 있는 연결 수
+ss -tn state syn-recv | wc -l
+</code></pre>
+
+<h4>7.5.2 SYN Backlog 모니터링</h4>
+<pre><code class="language-bash">cat > /tmp/monitor_syn_backlog.sh << 'EOF'
+#!/bin/bash
+
+echo "=== SYN Backlog 모니터링 ==="
+echo "tcp_max_syn_backlog: $(sysctl -n net.ipv4.tcp_max_syn_backlog)"
+echo "SYN_RCVD 상태 소켓 수: $(ss -tn state syn-recv | wc -l)"
+echo ""
+echo "SYN_RCVD 소켓 목록:"
+ss -tn state syn-recv
+EOF
+
+chmod +x /tmp/monitor_syn_backlog.sh
+
+# 실시간 모니터링
+watch -n 1 /tmp/monitor_syn_backlog.sh
+</code></pre>
+
+<h3>7.6 실습: 큐 크기 조정</h3>
+<h4>7.6.1 Accept Queue 크기 증가</h4>
+<pre><code class="language-bash"># somaxconn 증가
+sudo sysctl -w net.core.somaxconn=8192
+
+# 확인
+sysctl net.core.somaxconn
+
+# nginx 설정에서 backlog 명시 (필요시)
+# listen 80 backlog=8192;
+</code></pre>
+
+<h4>7.6.2 SYN Backlog 크기 증가</h4>
+<pre><code class="language-bash"># tcp_max_syn_backlog 증가
+sudo sysctl -w net.ipv4.tcp_max_syn_backlog=4096
+
+# 확인
+sysctl net.ipv4.tcp_max_syn_backlog
+</code></pre>
+
+<h3>7.7 실습: 큐 오버플로우 시뮬레이션</h3>
+<p class="warning"><strong>주의:</strong> 이 실습은 큐가 가득 찰 때의 동작을 확인하기 위한 것입니다. 실제 운영 환경에서는 주의해서 사용하세요.</p>
+
+<h4>7.7.1 작은 큐 크기로 설정</h4>
+<pre><code class="language-bash"># Accept Queue 크기를 작게 설정
+sudo sysctl -w net.core.somaxconn=10
+
+# SYN Backlog 크기를 작게 설정
+sudo sysctl -w net.ipv4.tcp_max_syn_backlog=10
+</code></pre>
+
+<h4>7.7.2 고속 연결 생성</h4>
+<pre><code class="language-bash"># 동시에 많은 연결 생성
+for i in {1..100}; do
+    curl -s http://localhost/ > /dev/null &
+done
+wait
+
+# 큐 상태 확인
+sudo ss -tln | grep LISTEN
+ss -tn state syn-recv | wc -l
+</code></pre>
+
+<h4>7.7.3 원래 설정 복원</h4>
+<pre><code class="language-bash"># 원래 값으로 복원
+sudo sysctl -w net.core.somaxconn=4096
+sudo sysctl -w net.ipv4.tcp_max_syn_backlog=2048
+</code></pre>
+
+<hr>
+
+<h2 id="8-장애-사례-실습">8. 장애 사례 실습</h2>
+<h3>8.1 이론</h3>
+<p>Socket 관련 장애는 여러 원인이 있을 수 있습니다. 주요 장애 사례:</p>
+<ul>
+<li>SYN Flood 공격</li>
+<li>Accept 지연</li>
+<li>Zero Window 상태</li>
+<li>TIME_WAIT 폭증</li>
+<li>CLOSE_WAIT 누적</li>
+<li>recv() stuck</li>
+<li>send() block</li>
+</ul>
+
+<h3>8.2 실습: SYN Flood 공격 시뮬레이션</h3>
+<p class="warning"><strong>주의:</strong> 이 실습은 교육 목적입니다. 실제 환경에서는 사용하지 마세요.</p>
+
+<h4>8.2.1 SYN Flood 공격 스크립트 작성</h4>
+<pre><code class="language-bash">cat > /tmp/syn_flood.py << 'EOF'
+#!/usr/bin/env python3
+import socket
+import sys
+
+target_ip = sys.argv[1] if len(sys.argv) > 1 else '127.0.0.1'
+target_port = int(sys.argv[2]) if len(sys.argv) > 2 else 80
+
+print(f"SYN Flood 시뮬레이션: {target_ip}:{target_port}")
+
+# 많은 SYN 패킷 전송 (실제로는 raw socket 필요)
+# 여기서는 일반 socket으로 시뮬레이션
+for i in range(1000):
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.1)
+        sock.connect((target_ip, target_port))
+        # ACK를 보내지 않고 연결 종료
+        sock.close()
+    except:
+        pass
+    if i % 100 == 0:
+        print(f"전송된 연결 시도: {i}")
+EOF
+
+chmod +x /tmp/syn_flood.py
+</code></pre>
+
+<h4>8.2.2 SYN Backlog 모니터링</h4>
+<pre><code class="language-bash"># SYN Backlog 모니터링 시작
+watch -n 1 'echo "SYN_RCVD: $(ss -tn state syn-recv | wc -l)"' &
+WATCH_PID=$!
+
+# SYN Flood 실행
+python3 /tmp/syn_flood.py 127.0.0.1 80
+
+# 모니터링 종료
+kill $WATCH_PID
+</code></pre>
+
+<h4>8.2.3 SYN Cookies 확인</h4>
+<pre><code class="language-bash"># SYN Cookies 활성화 여부 확인
+sysctl net.ipv4.tcp_syncookies
+
+# SYN Cookies 활성화 (기본값: 1)
+sudo sysctl -w net.ipv4.tcp_syncookies=1
+
+# 확인
+sysctl net.ipv4.tcp_syncookies
+</code></pre>
+
+<h3>8.3 실습: Accept 지연 확인</h3>
+<h4>8.3.1 Accept Queue 모니터링</h4>
+<pre><code class="language-bash"># Accept Queue 상태 모니터링
+watch -n 1 'sudo ss -tln | grep LISTEN | awk "{print \"Recv-Q:\", \$2}"'
+</code></pre>
+
+<h4>8.3.2 고속 연결 생성</h4>
+<pre><code class="language-bash"># 동시에 많은 연결 생성
+for i in {1..1000}; do
+    curl -s http://localhost/ > /dev/null &
+done
+
+# Accept Queue 상태 확인
+sudo ss -tln | grep LISTEN
+</code></pre>
+
+<h3>8.4 실습: Zero Window 상태 확인</h3>
+<h4>8.4.1 수신 버퍼를 작게 설정</h4>
+<pre><code class="language-bash"># TCP 수신 버퍼를 작게 설정
+sudo sysctl -w net.ipv4.tcp_rmem="4096 4096 4096"
+sudo sysctl -w net.core.rmem_max=4096
+
+# 확인
+sysctl net.ipv4.tcp_rmem
+sysctl net.core.rmem_max
+</code></pre>
+
+<h4>8.4.2 대용량 데이터 전송</h4>
+<pre><code class="language-bash"># 대용량 파일 생성
+dd if=/dev/zero of=/tmp/large_file bs=1M count=100
+
+# 대용량 데이터 전송 (다른 터미널에서)
+# curl -T /tmp/large_file http://localhost/upload
+
+# Zero Window 상태 확인
+ss -i | grep -E "Recv-Q"
+</code></pre>
+
+<h4>8.4.3 원래 설정 복원</h4>
+<pre><code class="language-bash"># 원래 값으로 복원
+sudo sysctl -w net.ipv4.tcp_rmem="4096 87380 6291456"
+sudo sysctl -w net.core.rmem_max=212992
+</code></pre>
+
+<h3>8.5 실습: TIME_WAIT 폭증 확인</h3>
+<h4>8.5.1 TIME_WAIT 상태 모니터링</h4>
+<pre><code class="language-bash"># TIME_WAIT 상태 소켓 수 확인
+ss -tn state time-wait | wc -l
+
+# TIME_WAIT 소켓 목록
+ss -tn state time-wait | head -20
+</code></pre>
+
+<h4>8.5.2 짧은 연결 반복 생성</h4>
+<pre><code class="language-bash"># 많은 짧은 연결 생성
+for i in {1..1000}; do
+    curl -s http://localhost/ > /dev/null
+done
+
+# TIME_WAIT 상태 확인
+ss -tn state time-wait | wc -l
+</code></pre>
+
+<h4>8.5.3 Keep-Alive 사용</h4>
+<pre><code class="language-bash"># Keep-Alive를 사용한 연결
+curl -H "Connection: keep-alive" http://localhost/
+
+# 여러 요청을 같은 연결로
+curl -H "Connection: keep-alive" http://localhost/ &
+curl -H "Connection: keep-alive" http://localhost/ &
+wait
+
+# TIME_WAIT 상태 확인 (Keep-Alive 사용 시 감소)
+ss -tn state time-wait | wc -l
+</code></pre>
+
+<h3>8.6 실습: CLOSE_WAIT 상태 확인</h3>
+<h4>8.6.1 CLOSE_WAIT 상태 모니터링</h4>
+<pre><code class="language-bash"># CLOSE_WAIT 상태 소켓 확인
+ss -tn state close-wait
+
+# CLOSE_WAIT 소켓 수
+ss -tn state close-wait | wc -l
+</code></pre>
+
+<h4>8.6.2 CLOSE_WAIT 발생 시나리오</h4>
+<p class="info">CLOSE_WAIT는 상대방이 연결을 종료했지만 애플리케이션이 close()를 호출하지 않을 때 발생합니다. 정상적인 상황에서는 오래 지속되지 않아야 합니다.</p>
+
+<pre><code class="language-bash"># CLOSE_WAIT 상태가 있는 프로세스 확인
+sudo ss -tnp state close-wait
+
+# 프로세스별 CLOSE_WAIT 소켓 수
+sudo ss -tnp state close-wait | awk '{print $6}' | sort | uniq -c
+</code></pre>
+
+<h3>8.7 실습: recv() stuck 확인</h3>
+<h4>8.7.1 recv() stuck 시뮬레이션</h4>
+<pre><code class="language-bash">cat > /tmp/recv_stuck.py << 'EOF'
+#!/usr/bin/env python3
+import socket
+import time
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect(('127.0.0.1', 80))
+
+# 타임아웃 없이 recv() 호출 (블로킹)
+print("recv() 호출 (블로킹)...")
+try:
+    data = sock.recv(1024)  # 서버가 데이터를 보내지 않으면 블로킹
+    print(f"수신: {data}")
+except Exception as e:
+    print(f"에러: {e}")
+finally:
+    sock.close()
+EOF
+
+chmod +x /tmp/recv_stuck.py
+</code></pre>
+
+<h4>8.7.2 타임아웃 설정</h4>
+<pre><code class="language-bash">cat > /tmp/recv_timeout.py << 'EOF'
+#!/usr/bin/env python3
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.settimeout(5)  # 5초 타임아웃
+sock.connect(('127.0.0.1', 80))
+
+print("recv() 호출 (5초 타임아웃)...")
+try:
+    data = sock.recv(1024)
+    print(f"수신: {data}")
+except socket.timeout:
+    print("타임아웃 발생")
+except Exception as e:
+    print(f"에러: {e}")
+finally:
+    sock.close()
+EOF
+
+chmod +x /tmp/recv_timeout.py
+python3 /tmp/recv_timeout.py
+</code></pre>
+
+<h3>8.8 실습: send() block 확인</h3>
+<h4>8.8.1 send() block 시뮬레이션</h4>
+<pre><code class="language-bash">cat > /tmp/send_block.py << 'EOF'
+#!/usr/bin/env python3
+import socket
+
+# 송신 버퍼를 작게 설정한 소켓
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024)  # 1KB 송신 버퍼
+sock.connect(('127.0.0.1', 80))
+
+# 대용량 데이터 전송 (버퍼가 가득 차면 블로킹)
+print("대용량 데이터 전송 중...")
+large_data = b'x' * 100000  # 100KB
+try:
+    sent = sock.send(large_data)
+    print(f"전송됨: {sent} bytes")
+except Exception as e:
+    print(f"에러: {e}")
+finally:
+    sock.close()
+EOF
+
+chmod +x /tmp/send_block.py
+</code></pre>
+
+<h4>8.8.2 Non-blocking send()</h4>
+<pre><code class="language-bash">cat > /tmp/send_nonblock.py << 'EOF'
+#!/usr/bin/env python3
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setblocking(False)  # Non-blocking 모드
+sock.connect(('127.0.0.1', 80))
+
+large_data = b'x' * 100000
+print("Non-blocking send() 시도...")
+try:
+    sent = sock.send(large_data)
+    print(f"전송됨: {sent} bytes")
+except BlockingIOError:
+    print("EAGAIN: 버퍼가 가득 참, 나중에 다시 시도 필요")
+except Exception as e:
+    print(f"에러: {e}")
+finally:
+    sock.close()
+EOF
+
+chmod +x /tmp/send_nonblock.py
+python3 /tmp/send_nonblock.py
+</code></pre>
+
+<hr>
+
+<h2 id="9-종합-실습">9. 종합 실습</h2>
+<h3>9.1 실습: Socket 모니터링 대시보드</h3>
+<h4>9.1.1 종합 모니터링 스크립트 작성</h4>
+<pre><code class="language-bash">cat > /tmp/socket_dashboard.sh << 'EOF'
+#!/bin/bash
+
+clear
+echo "=========================================="
+echo "   Socket 모니터링 대시보드"
+echo "   시간: $(date '+%Y-%m-%d %H:%M:%S')"
+echo "=========================================="
+echo ""
+
+echo "--- Socket 통계 ---"
+ss -s
+echo ""
+
+echo "--- TCP 상태별 소켓 수 ---"
+echo "LISTEN:      $(ss -tn state listen | wc -l)"
+echo "ESTABLISHED: $(ss -tn state established | wc -l)"
+echo "TIME-WAIT:   $(ss -tn state time-wait | wc -l)"
+echo "CLOSE-WAIT:  $(ss -tn state close-wait | wc -l)"
+echo "SYN-RECV:    $(ss -tn state syn-recv | wc -l)"
+echo ""
+
+echo "--- 커널 큐 설정 ---"
+echo "somaxconn:           $(sysctl -n net.core.somaxconn)"
+echo "tcp_max_syn_backlog: $(sysctl -n net.ipv4.tcp_max_syn_backlog)"
+echo ""
+
+echo "--- TCP 버퍼 설정 ---"
+echo "tcp_rmem: $(sysctl -n net.ipv4.tcp_rmem)"
+echo "tcp_wmem: $(sysctl -n net.ipv4.tcp_wmem)"
+echo "rmem_max: $(sysctl -n net.core.rmem_max)"
+echo "wmem_max: $(sysctl -n net.core.wmem_max)"
+echo ""
+
+echo "--- LISTEN 소켓의 Accept Queue ---"
+sudo ss -tln | grep LISTEN | awk '{printf "Port %s: Recv-Q=%s\n", $4, $2}'
+echo ""
+
+echo "--- 상위 5개 ESTABLISHED 연결 ---"
+ss -tn state established | head -6
+echo ""
+
+echo "=========================================="
+EOF
+
+chmod +x /tmp/socket_dashboard.sh
+
+# 실시간 대시보드
+watch -n 2 /tmp/socket_dashboard.sh
+</code></pre>
+
+<h3>9.2 실습: Socket 성능 테스트</h3>
+<h4>9.2.1 성능 테스트 스크립트</h4>
+<pre><code class="language-bash">cat > /tmp/socket_perf_test.sh << 'EOF'
+#!/bin/bash
+
+echo "=== Socket 성능 테스트 ==="
+echo ""
+
+# 1. 연결 속도 테스트
+echo "1. 연결 속도 테스트"
+time for i in {1..100}; do
+    curl -s http://localhost/ > /dev/null
+done
+
+echo ""
+echo "2. 동시 연결 테스트"
+time for i in {1..100}; do
+    curl -s http://localhost/ > /dev/null &
+done
+wait
+
+echo ""
+echo "3. Keep-Alive 연결 테스트"
+time (
+    curl -s -H "Connection: keep-alive" http://localhost/ > /dev/null
+    curl -s -H "Connection: keep-alive" http://localhost/ > /dev/null
+    curl -s -H "Connection: keep-alive" http://localhost/ > /dev/null
+)
+EOF
+
+chmod +x /tmp/socket_perf_test.sh
+/tmp/socket_perf_test.sh
+</code></pre>
+
+<h3>9.3 실습: Socket 문제 진단 체크리스트</h3>
+<pre><code class="language-bash">cat > /tmp/socket_diagnosis.sh << 'EOF'
+#!/bin/bash
+
+echo "=== Socket 문제 진단 체크리스트 ==="
+echo ""
+
+# 1. Socket 통계
+echo "1. Socket 통계"
+ss -s
+echo ""
+
+# 2. 비정상적인 상태 확인
+echo "2. 비정상적인 상태 확인"
+echo "CLOSE_WAIT: $(ss -tn state close-wait | wc -l) (0이어야 함)"
+echo "SYN_RECV:   $(ss -tn state syn-recv | wc -l) (일시적이어야 함)"
+echo "TIME_WAIT:  $(ss -tn state time-wait | wc -l) (과도하면 문제)"
+echo ""
+
+# 3. 큐 상태 확인
+echo "3. 큐 상태 확인"
+echo "Accept Queue (Recv-Q):"
+sudo ss -tln | grep LISTEN | awk '{print "  Port", $4, ": Recv-Q=", $2}'
+echo ""
+
+# 4. 버퍼 설정 확인
+echo "4. 버퍼 설정 확인"
+echo "tcp_rmem: $(sysctl -n net.ipv4.tcp_rmem)"
+echo "tcp_wmem: $(sysctl -n net.ipv4.tcp_wmem)"
+echo ""
+
+# 5. 에러 통계
+echo "5. 에러 통계"
+netstat -s | grep -E "segments retransmitted|bad segments|checksum errors" | head -5
+echo ""
+
+echo "=== 진단 완료 ==="
+EOF
+
+chmod +x /tmp/socket_diagnosis.sh
+/tmp/socket_diagnosis.sh
+</code></pre>
+
+<hr>
+
+<h2 id="부록-유용한-명령어-모음">부록: 유용한 명령어 모음</h2>
+<h3>Socket 상태 확인</h3>
+<pre><code class="language-bash">ss -a                    # 모든 소켓
+ss -tln                  # LISTEN 소켓
+ss -tn state established # ESTABLISHED 연결
+ss -i                    # Socket 내부 정보
+ss -s                    # Socket 통계
+</code></pre>
+
+<h3>커널 큐 확인</h3>
+<pre><code class="language-bash">sysctl net.core.somaxconn              # Accept Queue 크기
+sysctl net.ipv4.tcp_max_syn_backlog    # SYN Backlog 크기
+ss -tln | grep LISTEN                  # Accept Queue 상태
+ss -tn state syn-recv                  # SYN Backlog 상태
+</code></pre>
+
+<h3>TCP 버퍼 확인</h3>
+<pre><code class="language-bash">sysctl net.ipv4.tcp_rmem               # TCP 수신 버퍼
+sysctl net.ipv4.tcp_wmem               # TCP 송신 버퍼
+sysctl net.core.rmem_max               # 시스템 수신 버퍼 최대값
+sysctl net.core.wmem_max               # 시스템 송신 버퍼 최대값
+</code></pre>
+
+<h3>프로세스 추적</h3>
+<pre><code class="language-bash">strace -e trace=socket,bind,listen,accept -f <command>
+ltrace -e socket,bind,listen,accept <command>
+lsof -i :80                            # 포트 80 사용 프로세스
+</code></pre>
+
+<h3>패킷 캡처</h3>
+<pre><code class="language-bash">tcpdump -i any -n 'tcp port 80'        # TCP 패킷 캡처
+tcpdump -i any 'tcp[tcpflags] & tcp-syn != 0'  # SYN 패킷만
+</code></pre>
+
+<hr>
+
+<h2 id="문제-해결">문제 해결</h2>
+<h3>일반적인 문제</h3>
+<ol>
+<li><strong>권한 오류</strong>: 대부분의 Socket 모니터링 도구는 root 권한이 필요합니다.</li>
+</ol>
+<pre><code class="language-bash">sudo <command>
+</code></pre>
+<ol>
+<li><strong>포트가 이미 사용 중</strong>: 다른 프로세스가 포트를 사용하고 있을 수 있습니다.</li>
+</ol>
+<pre><code class="language-bash">sudo lsof -i :80
+sudo ss -tlnp | grep :80
+</code></pre>
+<ol>
+<li><strong>Socket이 보이지 않음</strong>: 권한 문제일 수 있습니다.</li>
+</ol>
+<pre><code class="language-bash">sudo ss -a
+</code></pre>
+
+<hr>
+
+<h2 id="참고-자료">참고 자료</h2>
+<ul>
+<li><a href="soket.html">Socket Flow Map</a> - Socket 개념 시각화</li>
+<li><a href="socket-cate.md">socket-cate.md</a> - Socket 강의 구조</li>
+<li><a href="tutorial.html">네트워크 스택 튜토리얼</a> - 네트워크 스택 실습</li>
+<li><a href="https://www.kernel.org/doc/html/latest/networking/">Linux Network Stack Documentation</a></li>
+<li><a href="https://man7.org/linux/man-pages/man7/socket.7.html">socket(7) man page</a></li>
+</ul>
+
+<hr>
+
+<h2 id="라이선스">라이선스</h2>
+<p>이 튜토리얼은 교육 목적으로 자유롭게 사용할 수 있습니다.</p>
+
+  </div>
+</body>
+</html>
