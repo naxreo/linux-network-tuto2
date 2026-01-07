@@ -9,8 +9,7 @@ RUN apk add --no-cache curl && \
     apk del curl
 
 # HTML 파일들 복사
-COPY index.html /usr/share/nginx/html/
-COPY tutorial.html /usr/share/nginx/html/
+COPY *.html /usr/share/nginx/html/
 
 # nginx 설정 (기본 설정 사용)
 EXPOSE 80

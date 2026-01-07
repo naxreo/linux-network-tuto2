@@ -1,4 +1,20 @@
-PROTO.md
+# Git 관련
 .git
 .gitignore
 
+# 마크다운 파일 (HTML로 변환된 파일만 사용)
+*.md
+
+# Python 스크립트 (빌드 시 필요 없음)
+md_to_html.py
+
+# 다운로드 스크립트
+download-dependencies.sh
+
+# Docker 관련 파일
+docker-compose.yml
+Dockerfile*
+.dockerignore
+
+# 기타
+README.md

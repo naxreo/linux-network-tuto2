@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  linux-network-map:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: linux-network-map
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    networks:
+      - network-map-network
+
+  linux-network-map-offline:
+    build:
+      context: .
+      dockerfile: Dockerfile.offline
+    container_name: linux-network-map-offline
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+    networks:
+      - network-map-network
+    profiles:
+      - offline
+
+networks:
+  network-map-network:
+    driver: bridge
