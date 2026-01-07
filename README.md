@@ -43,6 +43,95 @@ docker stop network-map
 docker rm network-map
 ```
 
+## Kubernetes로 배포하기
+
+### 사전 준비
+
+1. Docker 이미지 빌드 및 레지스트리에 푸시:
+```bash
+# 이미지 빌드
+docker build -t linux-network-map:latest .
+
+# 레지스트리에 푸시 (예: Docker Hub)
+docker tag linux-network-map:latest your-registry/linux-network-map:latest
+docker push your-registry/linux-network-map:latest
+```
+
+2. `k8s/deployment.yaml` 파일에서 이미지 경로 수정:
+```yaml
+image: your-registry/linux-network-map:latest
+```
+
+### 배포
+
+```bash
+# Namespace 생성 (먼저 실행)
+kubectl apply -f k8s/namespace.yaml
+
+# 모든 리소스 배포
+kubectl apply -f k8s/
+
+# 또는 개별 배포
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+kubectl apply -f k8s/ingress.yaml
+```
+
+### 확인
+
+```bash
+# Namespace 확인
+kubectl get namespace tuto
+
+# Deployment 상태 확인 (namespace 지정)
+kubectl get deployment linux-network-map -n tuto
+
+# Pod 상태 확인 (namespace 지정)
+kubectl get pods -l app=linux-network-map -n tuto
+
+# Service 확인 (namespace 지정)
+kubectl get service linux-network-map -n tuto
+
+# Ingress 확인 (namespace 지정)
+kubectl get ingress linux-network-map -n tuto
+
+# 또는 모든 리소스 한번에 확인
+kubectl get all -n tuto
+```
+
+### 접속
+
+1. **Service를 통한 접속** (클러스터 내부):
+```bash
+# Port-forward 사용 (namespace 지정)
+kubectl port-forward service/linux-network-map 8080:80 -n tuto
+
+# 브라우저에서 접속
+# http://localhost:8080/index.html
+```
+
+2. **Ingress를 통한 접속** (외부 접근):
+   - `k8s/ingress.yaml`의 `host` 값을 실제 도메인으로 수정
+   - DNS 설정 또는 `/etc/hosts`에 도메인 추가
+   - Ingress Controller가 설치되어 있어야 함
+
+### 삭제
+
+```bash
+# 모든 리소스 삭제
+kubectl delete -f k8s/
+
+# 또는 개별 삭제
+kubectl delete -f k8s/deployment.yaml
+kubectl delete -f k8s/service.yaml
+kubectl delete -f k8s/ingress.yaml
+kubectl delete -f k8s/namespace.yaml
+
+# 또는 Namespace 삭제로 모든 리소스 한번에 삭제
+kubectl delete namespace tuto
+```
+
 ## 특징
 
 - **인터랙티브 맵**: 패닝, 줌, 노드 클릭으로 상세 정보 확인

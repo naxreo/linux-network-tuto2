@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linux-network-map
+  namespace: tuto
+  labels:
+    app: linux-network-map
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: linux-network-map
+  template:
+    metadata:
+      labels:
+        app: linux-network-map
+        version: v1
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/ay2: "true"
+      containers:
+      - name: nginx
+        image: idock.daumkakao.io/ocell/linux-network-map:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      restartPolicy: Always
